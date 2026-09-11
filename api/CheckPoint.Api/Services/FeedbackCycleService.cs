@@ -12,44 +12,65 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
     // boundaries fall on the 1st of these calendar months, in year order.
     private static readonly int[] QuarterStartMonths = [1, 4, 7, 10];
 
-    // Called by the unified flag action's cycle-engine hook (CBLT-230) whenever a
-    // check-in's feedback is flagged. Not wired to any endpoint yet since the flag
-    // action itself doesn't exist (CBLT-239, Milestone 8) — this is the hook CBLT-
-    // 230 will call once it does. Every effect of flagging other than this one
-    // (Under Review status, LM/Practice Lead catch-up) belongs to the Ad-hoc
+    // The single, well-defined entry point for "a check-in's feedback was
+    // flagged" (spec Section 5.3, CBLT-230) — callable for any check-in in any
+    // cycle. Not wired to any endpoint yet since the unified flag action itself
+    // doesn't exist (CBLT-239, Milestone 8); this is the hook it will call once it
+    // does. Always sets the Person Under Review and creates a pending catch-up
+    // record; only a New Starter 4-week check-in additionally triggers the
+    // 6-week insert (CBLT-227). Idempotent per check-in (a CatchUp already
+    // existing for this FeedbackRequestId means it's already been processed) —
+    // recording who eventually handles the catch-up, and any other flagging
+    // effect (e.g. cross-check-in non-response tracking), belongs to the Ad-hoc
     // Review epic and isn't implemented here.
     public async Task HandleCheckInFlaggedAsync(Guid feedbackRequestId, CancellationToken cancellationToken = default)
     {
-        var flagged = await db.FeedbackRequests.SingleOrDefaultAsync(r => r.Id == feedbackRequestId, cancellationToken);
+        var flagged = await db.FeedbackRequests
+            .Include(r => r.ProjectMembership).ThenInclude(m => m.Person)
+            .SingleOrDefaultAsync(r => r.Id == feedbackRequestId, cancellationToken);
+
+        if (flagged is null)
+        {
+            return;
+        }
+
+        var alreadyProcessed = await db.CatchUps.AnyAsync(c => c.FeedbackRequestId == feedbackRequestId, cancellationToken);
+        if (alreadyProcessed)
+        {
+            return;
+        }
+
+        var person = flagged.ProjectMembership.Person;
+        person.UnderReviewSince = timeProvider.GetUtcNow();
+
+        db.CatchUps.Add(new CatchUp
+        {
+            PersonId = person.Id,
+            FeedbackRequestId = flagged.Id,
+            CreatedAt = timeProvider.GetUtcNow(),
+        });
 
         // Scoped specifically to the New Starter cycle's 4-week stage (spec
-        // Section 5.1/5.3) — flagging any other stage has no cycle-engine effect
-        // here.
-        if (flagged is null || flagged.Stage != FeedbackRequestStage.NewStarterWeek4)
+        // Section 5.1/5.3) — flagging any other stage has no further effect here.
+        if (flagged.Stage == FeedbackRequestStage.NewStarterWeek4)
         {
-            return;
+            var alreadyInsertedSixWeek = await db.FeedbackRequests.AnyAsync(
+                r => r.ProjectMembershipId == flagged.ProjectMembershipId && r.Stage == FeedbackRequestStage.NewStarterWeek6,
+                cancellationToken);
+            if (!alreadyInsertedSixWeek)
+            {
+                // Same mechanism as any other scheduled request — no POC
+                // snapshot, no special-cased notification path — so it
+                // automatically follows the same POC-targeting and notification
+                // behaviour once the dispatch job exists.
+                db.FeedbackRequests.Add(new FeedbackRequest
+                {
+                    ProjectMembershipId = flagged.ProjectMembershipId,
+                    ScheduledFor = flagged.ProjectMembership.JoinedAt.AddDays(6 * 7),
+                    Stage = FeedbackRequestStage.NewStarterWeek6,
+                });
+            }
         }
-
-        var alreadyInserted = await db.FeedbackRequests.AnyAsync(
-            r => r.ProjectMembershipId == flagged.ProjectMembershipId && r.Stage == FeedbackRequestStage.NewStarterWeek6,
-            cancellationToken);
-        if (alreadyInserted)
-        {
-            return;
-        }
-
-        var membership = await db.ProjectMemberships.SingleAsync(
-            m => m.Id == flagged.ProjectMembershipId, cancellationToken);
-
-        // Same mechanism as any other scheduled request — no POC snapshot, no
-        // special-cased notification path — so it automatically follows the same
-        // POC-targeting and notification behaviour once the dispatch job exists.
-        db.FeedbackRequests.Add(new FeedbackRequest
-        {
-            ProjectMembershipId = flagged.ProjectMembershipId,
-            ScheduledFor = membership.JoinedAt.AddDays(6 * 7),
-            Stage = FeedbackRequestStage.NewStarterWeek6,
-        });
 
         await db.SaveChangesAsync(cancellationToken);
     }

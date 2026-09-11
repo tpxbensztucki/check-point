@@ -14,6 +14,7 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<ProjectMembership> ProjectMemberships => Set<ProjectMembership>();
     public DbSet<Poc> Pocs => Set<Poc>();
     public DbSet<FeedbackRequest> FeedbackRequests => Set<FeedbackRequest>();
+    public DbSet<CatchUp> CatchUps => Set<CatchUp>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -67,6 +68,15 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .HasOne(m => m.Person)
             .WithMany()
             .HasForeignKey(m => m.PersonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Restrict on the Person side (history must survive), default cascade on
+        // FeedbackRequest (a CatchUp is meaningless without the request that
+        // triggered it, same reasoning as Poc -> ProjectMembership).
+        modelBuilder.Entity<CatchUp>()
+            .HasOne(c => c.Person)
+            .WithMany()
+            .HasForeignKey(c => c.PersonId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

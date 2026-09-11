@@ -296,6 +296,21 @@ unlike the New Starter stages, quarters have no distinct identity beyond "the ne
 one." Idempotency for both the first and subsequent schedules is a
 does-a-later-request-already-exist check, same shape as CBLT-227's guard.
 
+`FeedbackCycleService.HandleCheckInFlaggedAsync` (CBLT-230) is now the single,
+well-defined "a check-in's feedback was flagged" entry point — the same method
+CBLT-227 introduced, expanded to always set `Person.UnderReviewSince` (orthogonal
+to `Status`: Employed/Leaver is an employment lifecycle, being under review is a
+separate, overlapping flag, spec Section 5.3) and create a pending `CatchUp`
+record, with the New-Starter-4-week-specific 6-week insert layered on top only for
+that stage. Idempotent per check-in via a does-a-`CatchUp`-already-exist-for-this-
+`FeedbackRequestId` check, so a second flag on the same request does nothing (but
+a *different* check-in for the same Person still gets its own `CatchUp`). `CatchUp`
+doesn't store who the LM/Practice Lead actually are — like `Person.IsOrphaned`,
+that's resolved live via `Person.LineManagerId`/`Practice.PracticeLeadId` at read
+time. Recording a catch-up's outcome (Milestone 8) isn't implemented here — only
+the `Pending` state exists so far. Still not wired to any endpoint, for the same
+reason as CBLT-227/228: the flag action itself doesn't exist yet.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

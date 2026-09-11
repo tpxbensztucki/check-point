@@ -9,6 +9,13 @@ public class Person
     public required string FullName { get; set; }
     public PersonStatus Status { get; set; } = PersonStatus.Employed;
 
+    // Orthogonal to Status (Employed/Leaver is an employment lifecycle state;
+    // being under review is a separate, overlapping flag from a flagged check-in
+    // — spec Section 5.3) — set/refreshed by
+    // FeedbackCycleService.HandleCheckInFlaggedAsync, never cleared here (no
+    // "un-review" action exists yet).
+    public DateTimeOffset? UnderReviewSince { get; set; }
+
     public Guid PracticeId { get; set; }
     public Practice Practice { get; set; } = null!;
 
