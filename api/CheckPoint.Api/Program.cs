@@ -19,6 +19,7 @@ builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<OrgTreeService>();
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<PocService>();
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
 // SSO) exists — see its own doc comment. It must never run in Production, so the
@@ -83,6 +84,7 @@ app.MapDepartmentEndpoints();
 app.MapPersonEndpoints();
 app.MapOrgTreeEndpoints();
 app.MapProjectEndpoints();
+app.MapPocEndpoints();
 
 var summaries = new[]
 {

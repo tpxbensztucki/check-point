@@ -1,0 +1,60 @@
+using System.Security.Claims;
+using CheckPoint.Api.Contracts;
+using CheckPoint.Api.Domain;
+using CheckPoint.Api.Services;
+
+namespace CheckPoint.Api.Endpoints;
+
+public static class PocEndpoints
+{
+    public static void MapPocEndpoints(this WebApplication app)
+    {
+        // Admin, the Practice Lead of the target Person's Practice, or the Line
+        // Manager of the target Person — not a plain role check, so this only
+        // requires authentication; the ownership check lives in PocService.
+        var group = app.MapGroup("/projects/{projectId:guid}/people/{personId:guid}/pocs")
+            .RequireAuthorization();
+
+        group.MapPost("/", async (
+            Guid projectId, Guid personId, CreatePocRequest request, ClaimsPrincipal caller, PocService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.AssignPocAsync(
+                projectId,
+                personId,
+                request,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocAssignmentStatus.Assigned => Results.Created(
+                    $"/projects/{projectId}/people/{personId}/pocs", result.Pocs),
+                PocAssignmentStatus.MembershipNotFound => Results.NotFound(result.Error),
+                PocAssignmentStatus.Forbidden => Results.Forbid(),
+                _ => Results.BadRequest(result.Error),
+            };
+        });
+
+        group.MapGet("/", async (Guid projectId, Guid personId, ClaimsPrincipal caller, PocService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetPocsForViewerAsync(
+                projectId,
+                personId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocViewStatus.Success => Results.Ok(result.Pocs),
+                PocViewStatus.MembershipNotFound => Results.NotFound(result.Error),
+                _ => Results.Forbid(),
+            };
+        });
+    }
+}

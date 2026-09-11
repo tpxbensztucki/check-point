@@ -12,6 +12,7 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<Practice> Practices => Set<Practice>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMembership> ProjectMemberships => Set<ProjectMembership>();
+    public DbSet<Poc> Pocs => Set<Poc>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
