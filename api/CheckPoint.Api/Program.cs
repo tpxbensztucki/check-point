@@ -28,13 +28,14 @@ if (app.Environment.IsDevelopment())
 
 // The official ASP.NET Core container images set this automatically. Skip HTTPS
 // redirection there since Azure Container Apps terminates TLS at the ingress and
-// the container itself only binds HTTP.
+// the container itself only binds HTTP. Also skip outside plain local dev (e.g. in
+// integration tests via WebApplicationFactory), where nothing binds an HTTPS port.
 var runningInContainer = string.Equals(
     Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
     "true",
     StringComparison.OrdinalIgnoreCase);
 
-if (!runningInContainer)
+if (!runningInContainer && app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
@@ -66,3 +67,7 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+// Makes the implicit top-level-statements Program class public so
+// WebApplicationFactory<Program> can be used from the integration test project.
+public partial class Program;

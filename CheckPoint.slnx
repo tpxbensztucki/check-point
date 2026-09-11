@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/api/">
+    <Project Path="api/CheckPoint.Api.IntegrationTests/CheckPoint.Api.IntegrationTests.csproj" />
+    <Project Path="api/CheckPoint.Api.UnitTests/CheckPoint.Api.UnitTests.csproj" />
     <Project Path="api/CheckPoint.Api/CheckPoint.Api.csproj" />
   </Folder>
 </Solution>
