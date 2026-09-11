@@ -1,4 +1,5 @@
 using CheckPoint.Api;
+using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddDbContext<CheckPointDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<MagicLinkService>();
 
 var app = builder.Build();
 
