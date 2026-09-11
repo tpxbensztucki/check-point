@@ -20,6 +20,17 @@ public static class ProjectEndpoints
             };
         });
 
+        group.MapPost("/{projectId:guid}/complete", async (Guid projectId, ProjectService service) =>
+        {
+            var result = await service.CompleteProjectAsync(projectId);
+            return result.Status switch
+            {
+                ProjectCompletionStatus.Completed => Results.Ok(result.Project),
+                ProjectCompletionStatus.ProjectNotFound => Results.NotFound(result.Error),
+                _ => Results.BadRequest(result.Error),
+            };
+        });
+
         group.MapPost("/{projectId:guid}/people", async (
             Guid projectId, AddPersonToProjectRequest request, ProjectService service) =>
         {

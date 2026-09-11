@@ -192,15 +192,21 @@ orphaned-person flag on Line Manager change is deferred until that flag exists
 (CBLT-219).
 
 Milestone 4 (Project & POC Management): creating a Project and adding/removing a
-Person (CBLT-221) is done, Admin-only. `Project` has a `Status` (defaults to
-`Active`); `Person`<->`Project` is an explicit join entity, `ProjectMembership`
-(not an implicit many-to-many like `Person`/`Role`), because a Person's per-Project
-feedback cycle (Milestone 5) will need somewhere to attach state to a specific
-Person-Project pairing. `DELETE /projects/{id}/people/{personId}` soft-deletes —
-sets `RemovedAt` rather than deleting the row — so a Person's history on a Project
-survives removal, per this story's acceptance criteria. Adding a Leaver to a
-Project is rejected; enrolling a newly-added Person into that Project's New
-Starter cycle is deferred until the cycle engine exists (Milestone 5).
+Person (CBLT-221), and completing a Project (CBLT-222), are done, Admin-only.
+`Project` has a `Status` (defaults to `Active`); `Person`<->`Project` is an
+explicit join entity, `ProjectMembership` (not an implicit many-to-many like
+`Person`/`Role`), because a Person's per-Project feedback cycle (Milestone 5) will
+need somewhere to attach state to a specific Person-Project pairing. `DELETE
+/projects/{id}/people/{personId}` soft-deletes — sets `RemovedAt` rather than
+deleting the row — so a Person's history on a Project survives removal, per this
+story's acceptance criteria. Adding a Leaver to a Project is rejected; enrolling a
+newly-added Person into that Project's New Starter cycle is deferred until the
+cycle engine exists (Milestone 5). `POST /projects/{id}/complete` performs only the
+status transition itself (rejecting an already-Completed Project) — cancelling
+that Project's outstanding feedback requests and excluding it from future cycle
+scheduling are likewise deferred until the `FeedbackRequest` entity and cycle
+engine exist; completing a Project never touches the Person's own status or their
+other Projects.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

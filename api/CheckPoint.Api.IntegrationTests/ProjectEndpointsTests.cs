@@ -89,6 +89,83 @@ public class ProjectEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Admin_CanCompleteAProject()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+
+        var response = await client.PostAsync($"/projects/{project!.Id}/complete", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var completed = await response.Content.ReadFromJsonAsync<ProjectResponse>();
+        Assert.Equal(ProjectStatus.Completed, completed!.Status);
+    }
+
+    [Fact]
+    public async Task CompletingAnAlreadyCompletedProject_IsRejected()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+        await client.PostAsync($"/projects/{project!.Id}/complete", null);
+
+        var response = await client.PostAsync($"/projects/{project.Id}/complete", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompletingANonexistentProject_ReturnsNotFound()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsync($"/projects/{Guid.NewGuid()}/complete", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompletingAProject_DoesNotAffectAPersonsStatusOrTheirOtherActiveProjects()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var projectToComplete = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+        var otherProject = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project B")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+        await client.PostAsJsonAsync(
+            $"/projects/{projectToComplete!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
+        await client.PostAsJsonAsync(
+            $"/projects/{otherProject!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
+
+        await client.PostAsync($"/projects/{projectToComplete.Id}/complete", null);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
+        var person = await db.People.SingleAsync(p => p.Id == _employedPersonId);
+        var otherProjectStillActive = await db.Projects.SingleAsync(p => p.Id == otherProject.Id);
+        var otherMembershipStillActive = await db.ProjectMemberships.SingleAsync(
+            m => m.ProjectId == otherProject.Id && m.PersonId == _employedPersonId);
+
+        Assert.Equal(PersonStatus.Employed, person.Status);
+        Assert.Equal(ProjectStatus.Active, otherProjectStillActive.Status);
+        Assert.Null(otherMembershipStillActive.RemovedAt);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotCompleteAProject()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        var project = await (await admin.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+
+        using var client = CreateClient(_nonAdminPersonId);
+        var response = await client.PostAsync($"/projects/{project!.Id}/complete", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Admin_CanAddAnEmployedPersonToAProject()
     {
         using var client = CreateClient(_adminPersonId);

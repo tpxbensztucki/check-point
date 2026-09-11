@@ -13,6 +13,20 @@ public record ProjectCreationResult(ProjectCreationStatus Status, ProjectRespons
         new(ProjectCreationStatus.ValidationFailed, null, error);
 }
 
+public enum ProjectCompletionStatus { Completed, ValidationFailed, ProjectNotFound }
+
+public record ProjectCompletionResult(ProjectCompletionStatus Status, ProjectResponse? Project, string? Error)
+{
+    public static ProjectCompletionResult Completed(ProjectResponse project) =>
+        new(ProjectCompletionStatus.Completed, project, null);
+
+    public static ProjectCompletionResult Invalid(string error) =>
+        new(ProjectCompletionStatus.ValidationFailed, null, error);
+
+    public static ProjectCompletionResult ProjectNotFound(string error) =>
+        new(ProjectCompletionStatus.ProjectNotFound, null, error);
+}
+
 public enum ProjectMembershipStatus { Added, ValidationFailed, ProjectNotFound }
 
 public record ProjectMembershipResult(ProjectMembershipStatus Status, ProjectMembershipResponse? Membership, string? Error)
