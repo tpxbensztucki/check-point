@@ -128,9 +128,16 @@ endpoints yet. The magic-link mechanism is deliberately independent of the
 guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequestId`.
 
 Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214),
-Person creation (CBLT-215), editing a Person's details/Line Manager (CBLT-216), and
-role assignment/removal (CBLT-217) are done, all Admin-only — see "Auth (interim)"
-below for how "who is calling" is resolved ahead of real SSO. `Person` now carries
+Person creation (CBLT-215), editing a Person's details/Line Manager (CBLT-216),
+role assignment/removal (CBLT-217), and marking a Person as Leaver (CBLT-218) are
+done — see "Auth (interim)" below for how "who is calling" is resolved ahead of
+real SSO. Everything under `/people` is Admin-only except `POST
+/people/{id}/leaver`, which a Line Manager may also call for their own reports
+(checked manually in the handler against `Person.LineManagerId`, since it isn't a
+plain role check). Cancelling outstanding feedback requests and excluding a Leaver
+from future cycle enrolment are deferred until the `FeedbackRequest` entity and
+cycle engine exist (Milestones 5/6); the transition is deliberately one-way (no
+"un-leaver" action), per CBLT-218's acceptance criteria. `Person` now carries
 `Status` (defaults to `Employed`), a required `Practice`, and optional
 self-referencing `LineManager`/`HeadOfPractice` links; a new Person is always
 created with no Roles (role assignment is a separate story). `PUT /people/{id}`

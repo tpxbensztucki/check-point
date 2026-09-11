@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -216,6 +217,50 @@ public static class PersonEndpoints
             await db.SaveChangesAsync();
 
             return Results.Ok(new PersonRolesResponse(person.Id, person.Roles.Select(r => r.Name).ToList()));
+        });
+
+        // Setting Leaver is available to Admin (any Person) and to a Line Manager
+        // for their own reports, unlike the rest of /people which is Admin-only, so
+        // it needs its own group with a looser authorization requirement and a
+        // manual ownership check in the handler.
+        var leaverGroup = app.MapGroup("/people").RequireAuthorization();
+
+        leaverGroup.MapPost("/{personId:guid}/leaver", async (
+            Guid personId, ClaimsPrincipal caller, CheckPointDbContext db) =>
+        {
+            var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId);
+            if (person is null)
+            {
+                return Results.NotFound($"No Person found with id {personId}.");
+            }
+
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var isLineManagerOfPerson = caller.IsInRole(RoleNames.LineManager) && person.LineManagerId == callerId;
+            if (!caller.IsInRole(RoleNames.Admin) && !isLineManagerOfPerson)
+            {
+                return Results.Forbid();
+            }
+
+            if (person.Status == PersonStatus.Leaver)
+            {
+                return Results.BadRequest("Person is already a Leaver.");
+            }
+
+            // Cancelling outstanding feedback requests and excluding the Person from
+            // future cycle enrolment (spec Section 4) are deferred until the
+            // FeedbackRequest entity and cycle engine exist (Milestones 5/6). This
+            // transition is also deliberately one-way — there is no "un-leaver"
+            // action, per this story's acceptance criteria.
+            person.Status = PersonStatus.Leaver;
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new PersonResponse(
+                person.Id,
+                person.FullName,
+                person.Status,
+                person.PracticeId,
+                person.LineManagerId,
+                person.HeadOfPracticeId));
         });
     }
 }
