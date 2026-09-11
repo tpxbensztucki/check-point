@@ -103,6 +103,128 @@ public class PocEndpointsTests : IAsyncLifetime
 
     private string PocsPath() => $"/projects/{_projectId}/people/{_targetPersonId}/pocs";
 
+    private async Task<Guid> AssignPocAsync(HttpClient client)
+    {
+        var response = await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        return result!.Pocs[^1].Id;
+    }
+
+    [Fact]
+    public async Task Admin_CanEditAPoc()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var pocId = await AssignPocAsync(client);
+
+        var response = await client.PutAsJsonAsync(
+            $"{PocsPath()}/{pocId}",
+            new CreatePocRequest("Jamie Corrected", "jamie.new@example.com", PocRelationship.Internal, PocRole.Dm));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var updated = result!.Pocs.Single(p => p.Id == pocId);
+        Assert.Equal("Jamie Corrected", updated.Name);
+        Assert.Equal("jamie.new@example.com", updated.Email);
+        Assert.Equal(PocRelationship.Internal, updated.Relationship);
+        Assert.Equal(PocRole.Dm, updated.Role);
+    }
+
+    [Fact]
+    public async Task EditingAPocWithAnInvalidEmail_IsRejected()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var pocId = await AssignPocAsync(client);
+
+        var response = await client.PutAsJsonAsync(
+            $"{PocsPath()}/{pocId}",
+            new CreatePocRequest("Jamie Tech", "not-an-email", PocRelationship.Client, PocRole.Tech));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task EditingANonexistentPoc_ReturnsNotFound()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PutAsJsonAsync(
+            $"{PocsPath()}/{Guid.NewGuid()}",
+            new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LineManager_CannotEditAPocForSomeoneWhoIsNotTheirReport()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        var pocId = await AssignPocAsync(admin);
+
+        using var client = CreateClient(_otherLineManagerPersonId);
+        var response = await client.PutAsJsonAsync(
+            $"{PocsPath()}/{pocId}",
+            new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_CanRemoveAPoc()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var pocId = await AssignPocAsync(client);
+
+        var response = await client.DeleteAsync($"{PocsPath()}/{pocId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        Assert.Empty(result!.Pocs);
+        Assert.Contains(PocRole.Tech, result.MissingStandardRoles);
+    }
+
+    [Fact]
+    public async Task RemovingANonexistentPoc_ReturnsNotFound()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.DeleteAsync($"{PocsPath()}/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RemovingAPocFromOneProject_DoesNotAffectTheSamePersonsPocOnAnotherProject()
+    {
+        using var adminClient = CreateClient(_adminPersonId);
+        var otherProject = await (await adminClient.PostAsJsonAsync("/projects", new CreateProjectRequest("Second Project")))
+            .Content.ReadFromJsonAsync<ProjectResponse>();
+        await adminClient.PostAsJsonAsync(
+            $"/projects/{otherProject!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
+
+        var pocIdOnFirstProject = await AssignPocAsync(adminClient);
+        var otherProjectPocsPath = $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs";
+        await adminClient.PostAsJsonAsync(
+            otherProjectPocsPath, new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+
+        await adminClient.DeleteAsync($"{PocsPath()}/{pocIdOnFirstProject}");
+
+        var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(otherProjectPocsPath);
+        Assert.Single(otherProjectPocs!.Pocs);
+    }
+
+    [Fact]
+    public async Task NonAdmin_WithNoRelationToTarget_CannotRemoveAPoc()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        var pocId = await AssignPocAsync(admin);
+
+        using var client = CreateClient(_otherLineManagerPersonId);
+        var response = await client.DeleteAsync($"{PocsPath()}/{pocId}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Fact]
     public async Task Admin_CanAssignAPoc()
     {

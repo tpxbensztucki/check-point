@@ -19,6 +19,26 @@ public record PocAssignmentResult(PocAssignmentStatus Status, ProjectMembershipP
         new(PocAssignmentStatus.Forbidden, null, null);
 }
 
+public enum PocMutationStatus { Success, ValidationFailed, MembershipNotFound, PocNotFound, Forbidden }
+
+public record PocMutationResult(PocMutationStatus Status, ProjectMembershipPocsResponse? Pocs, string? Error)
+{
+    public static PocMutationResult Success(ProjectMembershipPocsResponse pocs) =>
+        new(PocMutationStatus.Success, pocs, null);
+
+    public static PocMutationResult Invalid(string error) =>
+        new(PocMutationStatus.ValidationFailed, null, error);
+
+    public static PocMutationResult MembershipNotFound(string error) =>
+        new(PocMutationStatus.MembershipNotFound, null, error);
+
+    public static PocMutationResult PocNotFound(string error) =>
+        new(PocMutationStatus.PocNotFound, null, error);
+
+    public static PocMutationResult Forbidden() =>
+        new(PocMutationStatus.Forbidden, null, null);
+}
+
 public enum PocViewStatus { Success, MembershipNotFound, Forbidden }
 
 public record PocViewResult(PocViewStatus Status, ProjectMembershipPocsResponse? Pocs, string? Error)
