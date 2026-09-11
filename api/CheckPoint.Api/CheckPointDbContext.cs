@@ -13,6 +13,7 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMembership> ProjectMemberships => Set<ProjectMembership>();
     public DbSet<Poc> Pocs => Set<Poc>();
+    public DbSet<FeedbackRequest> FeedbackRequests => Set<FeedbackRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

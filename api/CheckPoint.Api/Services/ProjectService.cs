@@ -1,11 +1,13 @@
 using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CheckPoint.Api.Services;
 
 // Projects and Person<->Project membership (spec Section 3).
-public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
+public class ProjectService(
+    CheckPointDbContext db, TimeProvider timeProvider, IOptions<NewStarterCycleOptions> newStarterCycleOptions)
 {
     public async Task<ProjectCreationResult> CreateProjectAsync(
         string name, CancellationToken cancellationToken = default)
@@ -22,11 +24,10 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
         return ProjectCreationResult.Created(new ProjectResponse(project.Id, project.Name, project.Status));
     }
 
-    // Cancelling outstanding feedback requests and excluding the Project from
-    // future cycle scheduling (spec Section 3) are deferred until the
-    // FeedbackRequest entity and cycle engine exist (Milestone 5) — this only
-    // performs the status transition itself, independent of any Person's
-    // Employed/Leaver status or their other Projects.
+    // Cancels every still-Scheduled FeedbackRequest tied to this Project so none
+    // of them fire later (spec Section 5.1), then performs the status transition
+    // itself, independent of any Person's Employed/Leaver status or their other
+    // Projects.
     public async Task<ProjectCompletionResult> CompleteProjectAsync(
         Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -42,6 +43,15 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
         }
 
         project.Status = ProjectStatus.Completed;
+
+        var scheduledRequests = await db.FeedbackRequests
+            .Where(r => r.ProjectMembership.ProjectId == projectId && r.Status == FeedbackRequestStatus.Scheduled)
+            .ToListAsync(cancellationToken);
+        foreach (var request in scheduledRequests)
+        {
+            request.Status = FeedbackRequestStatus.Cancelled;
+        }
+
         await db.SaveChangesAsync(cancellationToken);
 
         return ProjectCompletionResult.Completed(new ProjectResponse(project.Id, project.Name, project.Status));
@@ -114,9 +124,6 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
             return ProjectMembershipResult.Invalid($"No Person found with id {personId}.");
         }
 
-        // Enrolling into the Project's New Starter cycle (spec Section 5) is
-        // deferred until the cycle engine exists (Milestone 5) — this only
-        // enforces the "not if they're a Leaver" precondition for now.
         if (person.Status == PersonStatus.Leaver)
         {
             return ProjectMembershipResult.Invalid("A Leaver cannot be added to a Project.");
@@ -129,13 +136,30 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
             return ProjectMembershipResult.Invalid("Person is already an active member of this Project.");
         }
 
+        var joinedAt = timeProvider.GetUtcNow();
         var membership = new ProjectMembership
         {
             ProjectId = projectId,
             PersonId = personId,
-            JoinedAt = timeProvider.GetUtcNow(),
+            JoinedAt = joinedAt,
         };
         db.ProjectMemberships.Add(membership);
+
+        // New Starter cycle scheduling (spec Section 5.1): one FeedbackRequest per
+        // configured interval, relative to this Person's own start on this
+        // Project (not the Project's creation date), so staggered starters get
+        // staggered schedules. Which POCs to send to is deliberately not resolved
+        // or stored here — the dispatch job (Milestone 7) looks up the Project's
+        // currently assigned POCs at send time.
+        foreach (var weeks in newStarterCycleOptions.Value.IntervalWeeks)
+        {
+            db.FeedbackRequests.Add(new FeedbackRequest
+            {
+                ProjectMembership = membership,
+                ScheduledFor = joinedAt.AddDays(weeks * 7),
+            });
+        }
+
         await db.SaveChangesAsync(cancellationToken);
 
         return ProjectMembershipResult.Added(
