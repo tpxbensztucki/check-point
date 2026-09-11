@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchMagicLink, type MagicLinkResult } from '../api'
+import FeedbackForm from '../components/FeedbackForm'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; result: MagicLinkResult }
 
@@ -57,7 +58,7 @@ function GuestFeedbackPage() {
             />
           )}
         {state.kind === 'loaded' && state.result.status === 'valid' && (
-          <FeedbackFormPlaceholder feedbackRequestId={state.result.feedbackRequestId!} />
+          <FeedbackFormSection feedbackRequestId={state.result.feedbackRequestId!} />
         )}
       </div>
     </main>
@@ -73,14 +74,32 @@ function StatusMessage({ title, body }: { title: string; body: string }) {
   )
 }
 
-function FeedbackFormPlaceholder({ feedbackRequestId }: { feedbackRequestId: string }) {
+function FeedbackFormSection({ feedbackRequestId }: { feedbackRequestId: string }) {
+  const [submitted, setSubmitted] = useState(false)
+
+  if (submitted) {
+    return (
+      <div className="rounded-lg border border-gray-200 p-6 text-center">
+        <h1 className="text-lg font-semibold text-gray-900">Thank you</h1>
+        <p className="mt-2 text-sm text-gray-500">Your feedback has been recorded.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 p-6">
       <h1 className="text-lg font-semibold text-gray-900">Share your feedback</h1>
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-1 mb-6 text-sm text-gray-500">
         Feedback request <span className="font-mono">{feedbackRequestId}</span>
       </p>
-      <p className="mt-4 text-sm text-gray-400">The feedback form fields are coming soon.</p>
+      <FeedbackForm
+        onSubmit={() => {
+          // Actually sending this to the backend is a separate story
+          // (Submission handling and confirmation, CBLT-233) — this only
+          // demonstrates the form's own validation/submission behaviour for now.
+          setSubmitted(true)
+        }}
+      />
     </div>
   )
 }

@@ -328,11 +328,28 @@ dom` was added as the frontend's first routing dependency (none existed before);
 screen, and `web/src/api.ts` is the fetch-wrapper convention for calling the
 backend (no HTTP client library added — plain `fetch` plus `getApiBaseUrl()`).
 `GuestFeedbackPage` renders one of: loading, expired, already-submitted, invalid-
-link, or (once the link is `Valid`) a placeholder scoped to the returned
-`feedbackRequestId` — the actual form fields are a separate story (Structured
-3-field feedback form, CBLT-232) and aren't built yet. `web/nginx.conf` already had
+link, or (once the link is `Valid`) the feedback form. `web/nginx.conf` already had
 a SPA fallback (`try_files $uri /index.html`) from the original scaffold, so no
 changes were needed there for client-side routing to work in the container.
+
+`web/src/components/FeedbackForm.tsx` (CBLT-232) is the three-field form itself —
+"What they are doing well" / "What they aren't doing well" / "What they need to
+improve" — all required, each capped at 2000 characters
+(`FEEDBACK_FIELD_MAX_LENGTH`). Deliberately does **not** set an HTML `maxLength` on
+the `<textarea>`s: a guest can type past the limit, see the counter turn red, and
+get a blocking validation message on submit, rather than being silently stopped
+mid-keystroke — this matches the ticket's own BDD scenario (entering 2050
+characters, then being blocked) and gives clearer feedback than a hard cap. The
+Submit button is never `disabled`; invalid submission attempts show inline
+`role="alert"` errors and `aria-invalid`/`aria-describedby` on the offending
+field(s) instead, since a silently-disabled button is a common accessibility
+pitfall (spec Section 14) — screen-reader/keyboard users get no explanation for
+why nothing happens. `FeedbackForm` only validates and calls its `onSubmit` prop;
+`GuestFeedbackPage` wires a temporary local-only handler (just flips to a "thank
+you" state) since actually sending the result to the backend is a separate story
+(Submission handling and confirmation, CBLT-233). Added
+`@testing-library/user-event` as a new dev dependency for its tests (real
+typing/click/blur simulation, not just `fireEvent`).
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
