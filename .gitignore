@@ -15,6 +15,9 @@ dist-ssr/
 .env.*
 !.env.example
 
+# Docker Compose local overrides (e.g. different host ports)
+docker-compose.override.yml
+
 # Editors / OS
 .vscode/
 .idea/
