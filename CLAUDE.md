@@ -279,6 +279,23 @@ one membership tied to the completed request. Like CBLT-227's hook, **not wired 
 any endpoint** — neither trigger (guest submission, Milestone 6; No Response
 expiry, CBLT-237) exists yet — so it's tested by calling the service directly.
 
+`FeedbackCycleService.HandleFeedbackRequestCompletedAsync` (CBLT-229) now
+dispatches by `Stage`: a `NewStarterWeek8` completion enrols into the General
+cycle (CBLT-228) *and* schedules its first `FeedbackRequest.Stage.General`
+request; a `General` completion schedules the next one, continuing every FY
+quarter until the Project completes or the Person becomes a Leaver. FY quarters
+run Apr–Jun/Jul–Sep/Oct–Dec/Jan–Mar (spec Section 5.2), so boundaries are always
+the 1st of Jan/Apr/Jul/Oct. On first enrolment, if the next boundary falls within
+the configured skip threshold (`GeneralCycleOptions.SkipThresholdWeeks`, default
+4, interim stand-in for CBLT-253 exactly like `NewStarterCycleOptions`/CBLT-252)
+of the enrolment moment, that quarter is skipped in favour of the one after.
+Subsequent quarters are anchored to the *previous* request's own `ScheduledFor`
+(always a quarter-start date) rather than "now" processed-at time, so the cadence
+never drifts. A single `FeedbackRequestStage.General` value covers every quarter —
+unlike the New Starter stages, quarters have no distinct identity beyond "the next
+one." Idempotency for both the first and subsequent schedules is a
+does-a-later-request-already-exist check, same shape as CBLT-227's guard.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
