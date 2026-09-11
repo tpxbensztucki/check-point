@@ -266,6 +266,19 @@ action itself doesn't exist yet (CBLT-239, Milestone 8; CBLT-230 is the ticket t
 will call this hook from it) — so this is tested by calling the service directly,
 same style as `ProjectServiceSchedulingTests`/`MagicLinkServiceTests`.
 
+`ProjectMembership.GeneralCycleEnrolledAt` (CBLT-228, nullable, set once and never
+cleared) marks a membership as having transitioned from the New Starter cycle into
+the General (quarterly) cycle — it's both the idempotency guard and, for CBLT-229
+(FY-quarter scheduling), the anchor date that cycle will count from.
+`FeedbackCycleService.HandleFeedbackRequestCompletedAsync` sets it when the
+`NewStarterWeek8` request (always the last New Starter stage chronologically,
+whether or not a `Week6` was inserted) concludes — unless the Project has since
+Completed or the Person has since become a Leaver, in which case enrolment is
+skipped. Per Person per Project by construction, since it only ever touches the
+one membership tied to the completed request. Like CBLT-227's hook, **not wired to
+any endpoint** — neither trigger (guest submission, Milestone 6; No Response
+expiry, CBLT-237) exists yet — so it's tested by calling the service directly.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
