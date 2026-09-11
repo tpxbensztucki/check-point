@@ -96,12 +96,21 @@ for the frontend — so config is copy-paste-compatible between environments.
   commands in this doc (mount the repo root, `-w /src`). The integration tests also
   need the Docker socket available to whatever runs them (Testcontainers starts and
   stops the Postgres container itself).
-- None of these are wired into CI yet — that's CBLT-208.
+## CI
+
+`.github/workflows/ci.yml` runs on every PR and on push to `main`: backend unit
+tests, backend integration tests, frontend unit tests + build, and a build (no push)
+of both Docker images — five separate jobs, each must pass. Pushing tagged images to
+an Azure container registry and triggering a Container Apps deployment on merge to
+`main` is **not** implemented yet — that depends on CBLT-205/206 (Azure provisioning,
+on hold pending Azure access). Once Azure resources exist, add a job to this workflow
+gated on `github.ref == 'refs/heads/main'` that logs in to ACR, re-runs the two image
+builds with `push: true`, and triggers the deployment.
 
 ## Current state
 
 Milestone 1 (Infrastructure & Tooling): containerisation (CBLT-203, CBLT-204),
-Docker Compose (CBLT-207), and test project scaffolding (CBLT-209) are done.
-Remaining: CI/CD (CBLT-208 — build/test doesn't need Azure but pushing images does)
-and Azure provisioning (CBLT-205/206, on hold pending Azure access). No
-feedback-tool domain logic exists yet — that starts at Milestone 2.
+Docker Compose (CBLT-207), test project scaffolding (CBLT-209), and PR/main CI
+(CBLT-208, partial — see above) are done. Remaining: Azure image push + deploy (the
+rest of CBLT-208) and Azure provisioning (CBLT-205/206), both on hold pending Azure
+access. No feedback-tool domain logic exists yet — that starts at Milestone 2.

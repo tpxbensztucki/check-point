@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet test api/CheckPoint.Api.UnitTests --configuration Release
+
+  backend-integration-tests:
+    name: Backend integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      # Testcontainers starts/stops its own Postgres container against the runner's
+      # Docker daemon, which GitHub-hosted ubuntu runners provide by default.
+      - run: dotnet test api/CheckPoint.Api.IntegrationTests --configuration Release
+
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  build-api-image:
+    name: Build API image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          push: false
+
+  build-web-image:
+    name: Build frontend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: false
+
+  # Pushing tagged images to the Azure container registry and triggering a Container
+  # Apps deployment on merge to main is deferred until Azure access/resources are
+  # provisioned (see CBLT-205, CBLT-206). Once available, add a job here gated on
+  # `github.ref == 'refs/heads/main'` that logs in to ACR and re-runs the two builds
+  # above with `push: true` and a registry tag, then triggers the deployment.
