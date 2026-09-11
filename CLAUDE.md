@@ -76,6 +76,9 @@ api/CheckPoint.Api/            .NET 10 Web API
   Migrations/                    EF Core migrations
 CheckPoint.slnx                .NET solution file
 web/                            React + Tailwind frontend (Dockerfile, nginx, runtime-configurable API_BASE_URL)
+  src/pages/                      One component per route/screen
+  src/api.ts                      fetch wrapper(s) calling the backend, using getApiBaseUrl()
+  src/App.tsx                     react-router-dom route table
 docker-compose.yml              Full local stack: db + api + web
 ```
 
@@ -115,7 +118,10 @@ for the frontend — so config is copy-paste-compatible between environments.
   project. Run with: `dotnet test api/CheckPoint.Api.IntegrationTests`
 - **Frontend unit tests** — colocated with the component/module they cover as
   `*.test.tsx` / `*.test.ts` next to the source file (e.g. `src/App.test.tsx` next to
-  `src/App.tsx`). Uses Vitest + React Testing Library. Run with: `npm test` (in `web/`)
+  `src/App.tsx`). Uses Vitest + React Testing Library. Run with: `npm test` (in `web/`).
+  No HTTP-mocking library (e.g. MSW) is set up — network calls are mocked directly
+  with `vi.stubGlobal('fetch', vi.fn(...))` (see `GuestFeedbackPage.test.tsx`),
+  `vi.unstubAllGlobals()` in an `afterEach`/`beforeEach` to reset between tests.
 - Both `dotnet test` commands need a local .NET SDK, or run them via the
   `mcr.microsoft.com/dotnet/sdk:10.0` container the same way as other `dotnet`
   commands in this doc (mount the repo root, `-w /src`). The integration tests also
@@ -310,6 +316,23 @@ that's resolved live via `Person.LineManagerId`/`Practice.PracticeLeadId` at rea
 time. Recording a catch-up's outcome (Milestone 8) isn't implemented here — only
 the `Pending` state exists so far. Still not wired to any endpoint, for the same
 reason as CBLT-227/228: the flag action itself doesn't exist yet.
+
+Milestone 6 (Guest Feedback Form): the guest landing page (CBLT-231) is done — the
+**first real frontend UI screen** in this project (everything before it was
+backend-only). `GET /magic-links/{token}` (`MagicLinkEndpoints.cs`) wraps the
+existing `MagicLinkService.ValidateAsync` and is deliberately unauthenticated — no
+`RequireAuthorization` at all — since a guest never signs in (spec Section 9); it
+maps `Valid`→200, `NotFound`→404, `Expired`→410, `AlreadyUsed`→409. `react-router-
+dom` was added as the frontend's first routing dependency (none existed before);
+`web/src/App.tsx` is now the route table, `web/src/pages/` holds one component per
+screen, and `web/src/api.ts` is the fetch-wrapper convention for calling the
+backend (no HTTP client library added — plain `fetch` plus `getApiBaseUrl()`).
+`GuestFeedbackPage` renders one of: loading, expired, already-submitted, invalid-
+link, or (once the link is `Valid`) a placeholder scoped to the returned
+`feedbackRequestId` — the actual form fields are a separate story (Structured
+3-field feedback form, CBLT-232) and aren't built yet. `web/nginx.conf` already had
+a SPA fallback (`try_files $uri /index.html`) from the original scaffold, so no
+changes were needed there for client-side routing to work in the container.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

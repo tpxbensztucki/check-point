@@ -90,6 +90,7 @@ app.MapPersonEndpoints();
 app.MapOrgTreeEndpoints();
 app.MapProjectEndpoints();
 app.MapPocEndpoints();
+app.MapMagicLinkEndpoints();
 
 var summaries = new[]
 {
