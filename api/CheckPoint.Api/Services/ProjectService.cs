@@ -47,6 +47,58 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
         return ProjectCompletionResult.Completed(new ProjectResponse(project.Id, project.Name, project.Status));
     }
 
+    // Visibility follows the same role scoping as the org tree (spec Section 2):
+    // Admin sees any Person's Projects, a Practice Lead only their own Practice's
+    // People, a Line Manager only their own reports — not a plain role check, so
+    // the caller's identity/roles are passed in rather than resolved here.
+    public async Task<PersonProjectsResult> GetProjectsForPersonAsync(
+        Guid personId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId, cancellationToken);
+        if (person is null)
+        {
+            return PersonProjectsResult.PersonNotFound($"No Person found with id {personId}.");
+        }
+
+        var isLineManagerOfPerson = callerIsLineManager && person.LineManagerId == callerId;
+        var isLeadOfPersonsPractice = callerIsPracticeLead &&
+            await db.Practices.AnyAsync(p => p.Id == person.PracticeId && p.PracticeLeadId == callerId, cancellationToken);
+        if (!callerIsAdmin && !isLineManagerOfPerson && !isLeadOfPersonsPractice)
+        {
+            return PersonProjectsResult.Forbidden();
+        }
+
+        var memberships = await db.ProjectMemberships
+            .Where(m => m.PersonId == personId && m.RemovedAt == null)
+            .Select(m => new { m.Id, m.ProjectId, m.Project.Name, m.Project.Status })
+            .ToListAsync(cancellationToken);
+
+        var membershipIds = memberships.Select(m => m.Id).ToList();
+        var rolesByMembership = await db.Pocs
+            .Where(p => membershipIds.Contains(p.ProjectMembershipId))
+            .GroupBy(p => p.ProjectMembershipId)
+            .Select(g => new { MembershipId = g.Key, Roles = g.Select(p => p.Role).ToList() })
+            .ToDictionaryAsync(g => g.MembershipId, g => g.Roles, cancellationToken);
+
+        var summaries = memberships
+            .Select(m => new PersonProjectSummary(
+                m.ProjectId,
+                m.Name,
+                m.Status,
+                m.Status == ProjectStatus.Active
+                    ? PocRoleHelpers.ComputeMissingRoles(rolesByMembership.GetValueOrDefault(m.Id, []))
+                    : null))
+            .OrderBy(s => s.ProjectName)
+            .ToList();
+
+        return PersonProjectsResult.Success(summaries);
+    }
+
     public async Task<ProjectMembershipResult> AddPersonAsync(
         Guid projectId, Guid personId, CancellationToken cancellationToken = default)
     {

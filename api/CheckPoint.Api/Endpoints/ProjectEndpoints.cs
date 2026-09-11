@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
@@ -9,6 +10,29 @@ public static class ProjectEndpoints
     public static void MapProjectEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/projects").RequireAuthorization(policy => policy.RequireRole(RoleNames.Admin));
+
+        // Visibility follows the same role scoping as the org tree, not a plain
+        // role check, so this needs its own group requiring only authentication;
+        // the ownership check lives in ProjectService.
+        var personProjectsGroup = app.MapGroup("/people/{personId:guid}/projects").RequireAuthorization();
+
+        personProjectsGroup.MapGet("/", async (Guid personId, ClaimsPrincipal caller, ProjectService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetProjectsForPersonAsync(
+                personId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PersonProjectsStatus.Success => Results.Ok(result.Projects),
+                PersonProjectsStatus.PersonNotFound => Results.NotFound(result.Error),
+                _ => Results.Forbid(),
+            };
+        });
 
         group.MapPost("/", async (CreateProjectRequest request, ProjectService service) =>
         {

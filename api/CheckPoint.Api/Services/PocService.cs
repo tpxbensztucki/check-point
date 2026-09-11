@@ -211,8 +211,7 @@ public partial class PocService(CheckPointDbContext db)
             .Select(p => new PocResponse(p.Id, p.Name, p.Email, p.Relationship, p.Role))
             .ToListAsync(cancellationToken);
 
-        var presentRoles = pocs.Select(p => p.Role).ToHashSet();
-        var missingRoles = Enum.GetValues<PocRole>().Where(r => !presentRoles.Contains(r)).ToList();
+        var missingRoles = PocRoleHelpers.ComputeMissingRoles(pocs.Select(p => p.Role));
 
         return new ProjectMembershipPocsResponse(membershipId, pocs, missingRoles);
     }
