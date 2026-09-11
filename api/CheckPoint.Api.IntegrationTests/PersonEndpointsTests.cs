@@ -156,4 +156,97 @@ public class PersonEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Admin_CanEditPersonDetailsAndAssignLineManager()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var created = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Renamed", _practiceId, _adminPersonId, _adminPersonId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        Assert.Equal("Jamie Renamed", updated!.FullName);
+        Assert.Equal(_adminPersonId, updated.LineManagerId);
+        Assert.Equal(_adminPersonId, updated.HeadOfPracticeId);
+    }
+
+    [Fact]
+    public async Task PersonCannotBeSetAsTheirOwnLineManager()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var created = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, person.Id, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task EditingANonexistentPerson_ReturnsNotFound()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{Guid.NewGuid()}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task EditingAPersonWithANonexistentPractice_ReturnsBadRequest()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var created = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotEditPerson()
+    {
+        using var adminClient = CreateClient(_adminPersonId);
+        var created = await adminClient.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+
+        using var client = CreateClient(_nonAdminPersonId);
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnauthenticatedCaller_CannotEditPerson()
+    {
+        using var adminClient = CreateClient(_adminPersonId);
+        var created = await adminClient.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+
+        using var client = CreateClient();
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
