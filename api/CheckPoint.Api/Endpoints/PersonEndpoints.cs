@@ -1,34 +1,9 @@
 using System.Security.Claims;
+using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
-using Microsoft.EntityFrameworkCore;
+using CheckPoint.Api.Services;
 
 namespace CheckPoint.Api.Endpoints;
-
-public record CreatePersonRequest(
-    string FullName,
-    Guid PracticeId,
-    Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
-
-public record UpdatePersonRequest(
-    string FullName,
-    Guid PracticeId,
-    Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
-
-public record PersonResponse(
-    Guid Id,
-    string FullName,
-    PersonStatus Status,
-    Guid PracticeId,
-    Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
-
-// PracticeId is required when RoleName is RoleNames.PracticeLead (designates which
-// Practice the Person owns as its lead) and ignored otherwise.
-public record AssignRoleRequest(string RoleName, Guid? PracticeId);
-
-public record PersonRolesResponse(Guid PersonId, IReadOnlyList<string> Roles);
 
 public static class PersonEndpoints
 {
@@ -36,231 +11,71 @@ public static class PersonEndpoints
     {
         var group = app.MapGroup("/people").RequireAuthorization(policy => policy.RequireRole(RoleNames.Admin));
 
-        group.MapPost("/", async (CreatePersonRequest request, CheckPointDbContext db) =>
+        group.MapPost("/", async (CreatePersonRequest request, PersonService service) =>
         {
-            if (string.IsNullOrWhiteSpace(request.FullName))
+            var result = await service.CreateAsync(request);
+            return result.Status switch
             {
-                return Results.BadRequest("FullName is required.");
-            }
-
-            var practiceExists = await db.Practices.AnyAsync(p => p.Id == request.PracticeId);
-            if (!practiceExists)
-            {
-                return Results.BadRequest($"No Practice found with id {request.PracticeId}.");
-            }
-
-            if (request.LineManagerId is { } lineManagerId &&
-                !await db.People.AnyAsync(p => p.Id == lineManagerId))
-            {
-                return Results.BadRequest($"No Person found with id {lineManagerId} for LineManagerId.");
-            }
-
-            if (request.HeadOfPracticeId is { } headOfPracticeId &&
-                !await db.People.AnyAsync(p => p.Id == headOfPracticeId))
-            {
-                return Results.BadRequest($"No Person found with id {headOfPracticeId} for HeadOfPracticeId.");
-            }
-
-            // Status always defaults to Employed and Roles are always empty at
-            // creation — role assignment is a separate story (Assign/remove roles).
-            var person = new Person
-            {
-                FullName = request.FullName,
-                PracticeId = request.PracticeId,
-                LineManagerId = request.LineManagerId,
-                HeadOfPracticeId = request.HeadOfPracticeId,
+                PersonCreationStatus.Created => Results.Created($"/people/{result.Person!.Id}", result.Person),
+                _ => Results.BadRequest(result.Error),
             };
-            db.People.Add(person);
-            await db.SaveChangesAsync();
-
-            return Results.Created(
-                $"/people/{person.Id}",
-                new PersonResponse(
-                    person.Id,
-                    person.FullName,
-                    person.Status,
-                    person.PracticeId,
-                    person.LineManagerId,
-                    person.HeadOfPracticeId));
         });
 
-        group.MapPut("/{personId:guid}", async (
-            Guid personId, UpdatePersonRequest request, CheckPointDbContext db) =>
+        group.MapPut("/{personId:guid}", async (Guid personId, UpdatePersonRequest request, PersonService service) =>
         {
-            var person = await db.People.FindAsync(personId);
-            if (person is null)
+            var result = await service.UpdateAsync(personId, request);
+            return result.Status switch
             {
-                return Results.NotFound($"No Person found with id {personId}.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.FullName))
-            {
-                return Results.BadRequest("FullName is required.");
-            }
-
-            if (request.LineManagerId == personId)
-            {
-                return Results.BadRequest("A Person cannot be set as their own LineManager.");
-            }
-
-            var practiceExists = await db.Practices.AnyAsync(p => p.Id == request.PracticeId);
-            if (!practiceExists)
-            {
-                return Results.BadRequest($"No Practice found with id {request.PracticeId}.");
-            }
-
-            if (request.LineManagerId is { } lineManagerId &&
-                !await db.People.AnyAsync(p => p.Id == lineManagerId))
-            {
-                return Results.BadRequest($"No Person found with id {lineManagerId} for LineManagerId.");
-            }
-
-            if (request.HeadOfPracticeId is { } headOfPracticeId &&
-                !await db.People.AnyAsync(p => p.Id == headOfPracticeId))
-            {
-                return Results.BadRequest($"No Person found with id {headOfPracticeId} for HeadOfPracticeId.");
-            }
-
-            // Recalculating the orphaned-person flag on Line Manager change (spec
-            // Section 3) is deferred until that flag exists — see the Cross-practice
-            // visibility and Orphaned Person detection story (CBLT-219).
-            person.FullName = request.FullName;
-            person.PracticeId = request.PracticeId;
-            person.LineManagerId = request.LineManagerId;
-            person.HeadOfPracticeId = request.HeadOfPracticeId;
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new PersonResponse(
-                person.Id,
-                person.FullName,
-                person.Status,
-                person.PracticeId,
-                person.LineManagerId,
-                person.HeadOfPracticeId));
+                PersonUpdateStatus.Updated => Results.Ok(result.Person),
+                PersonUpdateStatus.NotFound => Results.NotFound(result.Error),
+                _ => Results.BadRequest(result.Error),
+            };
         });
 
         group.MapPost("/{personId:guid}/roles", async (
-            Guid personId, AssignRoleRequest request, CheckPointDbContext db) =>
+            Guid personId, AssignRoleRequest request, PersonService service) =>
         {
-            var person = await db.People.Include(p => p.Roles).SingleOrDefaultAsync(p => p.Id == personId);
-            if (person is null)
+            var result = await service.AssignRoleAsync(personId, request);
+            return result.Status switch
             {
-                return Results.NotFound($"No Person found with id {personId}.");
-            }
-
-            var role = await db.Roles.SingleOrDefaultAsync(r => r.Name == request.RoleName);
-            if (role is null)
-            {
-                return Results.BadRequest($"'{request.RoleName}' is not a valid role name.");
-            }
-
-            if (person.Roles.Any(r => r.Id == role.Id))
-            {
-                return Results.BadRequest($"Person already holds the '{request.RoleName}' role.");
-            }
-
-            Practice? practice = null;
-            if (request.RoleName == RoleNames.PracticeLead)
-            {
-                if (request.PracticeId is not { } practiceId)
-                {
-                    return Results.BadRequest("PracticeId is required when assigning the Practice Lead role.");
-                }
-
-                practice = await db.Practices.SingleOrDefaultAsync(p => p.Id == practiceId);
-                if (practice is null)
-                {
-                    return Results.BadRequest($"No Practice found with id {practiceId}.");
-                }
-            }
-
-            person.Roles.Add(role);
-            if (practice is not null)
-            {
-                practice.PracticeLeadId = person.Id;
-            }
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new PersonRolesResponse(person.Id, person.Roles.Select(r => r.Name).ToList()));
+                RoleAssignmentStatus.Assigned => Results.Ok(result.Roles),
+                RoleAssignmentStatus.PersonNotFound => Results.NotFound(result.Error),
+                _ => Results.BadRequest(result.Error),
+            };
         });
 
         group.MapDelete("/{personId:guid}/roles/{roleName}", async (
-            Guid personId, string roleName, CheckPointDbContext db) =>
+            Guid personId, string roleName, PersonService service) =>
         {
-            var person = await db.People.Include(p => p.Roles).SingleOrDefaultAsync(p => p.Id == personId);
-            if (person is null)
+            var result = await service.RemoveRoleAsync(personId, roleName);
+            return result.Status switch
             {
-                return Results.NotFound($"No Person found with id {personId}.");
-            }
-
-            var role = person.Roles.SingleOrDefault(r => r.Name == roleName);
-            if (role is null)
-            {
-                return Results.BadRequest($"Person does not hold the '{roleName}' role.");
-            }
-
-            person.Roles.Remove(role);
-
-            // A Practice Lead who loses the role no longer owns any Practice as its
-            // lead — clear every Practice pointing at them, not just one, since a
-            // Person may lead more than one Practice.
-            if (roleName == RoleNames.PracticeLead)
-            {
-                var ledPractices = await db.Practices.Where(p => p.PracticeLeadId == person.Id).ToListAsync();
-                foreach (var practice in ledPractices)
-                {
-                    practice.PracticeLeadId = null;
-                }
-            }
-
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new PersonRolesResponse(person.Id, person.Roles.Select(r => r.Name).ToList()));
+                RoleRemovalStatus.Removed => Results.Ok(result.Roles),
+                RoleRemovalStatus.PersonNotFound => Results.NotFound(result.Error),
+                _ => Results.BadRequest(result.Error),
+            };
         });
 
         // Setting Leaver is available to Admin (any Person) and to a Line Manager
         // for their own reports, unlike the rest of /people which is Admin-only, so
-        // it needs its own group with a looser authorization requirement and a
-        // manual ownership check in the handler.
+        // it needs its own group with a looser authorization requirement; the
+        // ownership check lives in the service.
         var leaverGroup = app.MapGroup("/people").RequireAuthorization();
 
         leaverGroup.MapPost("/{personId:guid}/leaver", async (
-            Guid personId, ClaimsPrincipal caller, CheckPointDbContext db) =>
+            Guid personId, ClaimsPrincipal caller, PersonService service) =>
         {
-            var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId);
-            if (person is null)
-            {
-                return Results.NotFound($"No Person found with id {personId}.");
-            }
-
             var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var isLineManagerOfPerson = caller.IsInRole(RoleNames.LineManager) && person.LineManagerId == callerId;
-            if (!caller.IsInRole(RoleNames.Admin) && !isLineManagerOfPerson)
+            var result = await service.MarkAsLeaverForViewerAsync(
+                personId, callerId, caller.IsInRole(RoleNames.Admin), caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
             {
-                return Results.Forbid();
-            }
-
-            if (person.Status == PersonStatus.Leaver)
-            {
-                return Results.BadRequest("Person is already a Leaver.");
-            }
-
-            // Cancelling outstanding feedback requests and excluding the Person from
-            // future cycle enrolment (spec Section 4) are deferred until the
-            // FeedbackRequest entity and cycle engine exist (Milestones 5/6). This
-            // transition is also deliberately one-way — there is no "un-leaver"
-            // action, per this story's acceptance criteria.
-            person.Status = PersonStatus.Leaver;
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new PersonResponse(
-                person.Id,
-                person.FullName,
-                person.Status,
-                person.PracticeId,
-                person.LineManagerId,
-                person.HeadOfPracticeId));
+                LeaverTransitionStatus.MarkedAsLeaver => Results.Ok(result.Person),
+                LeaverTransitionStatus.PersonNotFound => Results.NotFound(result.Error),
+                LeaverTransitionStatus.Forbidden => Results.Forbid(),
+                _ => Results.BadRequest(result.Error),
+            };
         });
     }
 }

@@ -40,6 +40,22 @@ its title.
   `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
   `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
   (Milestone 3).
+- **API structure — standing pattern for every feature area**: `Endpoints/` holds
+  only routing (`MapGroup`/`RequireAuthorization` wiring, thin lambdas that bind a
+  request, call one service method, and map the result to an `IResult`); request/
+  response DTOs live in `Contracts/`, one file per feature area; `Services/` holds
+  the actual business logic (validation, authorization checks that don't fit a
+  plain `RequireRole` policy, EF Core queries), each method returning a small
+  domain result type (a `...Status` enum plus a `...Result` record with static
+  factory helpers — see `MagicLinkService`/`MagicLinkValidationResult` for the
+  original precedent, or `PersonService`/`PersonResults.cs` for a fuller example).
+  No `CheckPointDbContext` is injected directly into an endpoint lambda. This was
+  introduced in CBLT-281 after `DepartmentEndpoints.cs`/`PersonEndpoints.cs` had
+  accumulated real business logic inline across CBLT-214–219; apply it from the
+  start for new endpoint groups rather than extracting it later. Deliberately not
+  in scope: a repository/interface abstraction over `CheckPointDbContext` — it
+  wouldn't add real unit-testability here (rules still need the database via EF
+  either way) and would be premature.
 - **Hosting:** Azure Container Apps — **on hold**: provisioning (CBLT-205/206) is
   deferred until Azure access is available. Everything else in Milestone 1 that
   doesn't need Azure (containerisation, Docker Compose, later CI build/test) is not
@@ -50,10 +66,16 @@ its title.
 ## Repo layout
 
 ```
-api/CheckPoint.Api/   .NET 10 Web API (Dockerfile, health check, EF Core + Postgres, no domain entities yet)
-CheckPoint.slnx       .NET solution file
-web/                  React + Tailwind frontend (Dockerfile, nginx, runtime-configurable API_BASE_URL)
-docker-compose.yml    Full local stack: db + api + web
+api/CheckPoint.Api/            .NET 10 Web API
+  Domain/                        EF Core entities
+  Contracts/                     Request/response DTOs, one file per feature area
+  Services/                      Business logic + EF Core queries, one class per feature area
+  Endpoints/                     Routing only — thin lambdas calling into Services
+  Auth/                          DevPersonAuthenticationHandler (see "Auth (interim)" below)
+  Migrations/                    EF Core migrations
+CheckPoint.slnx                .NET solution file
+web/                            React + Tailwind frontend (Dockerfile, nginx, runtime-configurable API_BASE_URL)
+docker-compose.yml              Full local stack: db + api + web
 ```
 
 ## Running locally
