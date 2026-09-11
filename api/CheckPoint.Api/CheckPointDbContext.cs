@@ -22,5 +22,26 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
 
         // Tokens must be unguessable and unique to look up a link by token alone.
         modelBuilder.Entity<MagicLink>().HasIndex(l => l.Token).IsUnique();
+
+        // Restrict rather than cascade on Person's self-referencing FKs and its
+        // required Practice FK — deleting a Practice or a line manager must never
+        // silently delete the People that reference them.
+        modelBuilder.Entity<Person>()
+            .HasOne(p => p.Practice)
+            .WithMany(pr => pr.People)
+            .HasForeignKey(p => p.PracticeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Person>()
+            .HasOne(p => p.LineManager)
+            .WithMany()
+            .HasForeignKey(p => p.LineManagerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Person>()
+            .HasOne(p => p.HeadOfPractice)
+            .WithMany()
+            .HasForeignKey(p => p.HeadOfPracticeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
