@@ -35,25 +35,29 @@ its title.
 
 - **Backend:** .NET 10, containerised — `api/CheckPoint.Api`
 - **Frontend:** React + TypeScript + Tailwind CSS (via Vite) — `web/`
-- **Database:** PostgreSQL (Azure Database for PostgreSQL Flexible Server), EF Core
-  migrations — not yet wired up
-- **Hosting:** Azure Container Apps — not yet provisioned
-- **Local dev:** intended to be Docker Compose mirroring deployed images — not yet
-  set up (see Linear milestone "1. Infrastructure & Tooling")
+- **Database:** PostgreSQL. EF Core is wired up with a bare `CheckPointDbContext`
+  (no domain entities yet) and an initial migration; it auto-applies pending
+  migrations on API startup.
+- **Hosting:** Azure Container Apps — **on hold**: provisioning (CBLT-205/206) is
+  deferred until Azure access is available. Everything else in Milestone 1 that
+  doesn't need Azure (containerisation, Docker Compose, later CI build/test) is not
+  blocked by this.
+- **Local dev:** `docker compose up --build` runs Postgres, API, and frontend
+  together — see the root README.
 
 ## Repo layout
 
 ```
-api/CheckPoint.Api/   .NET 10 Web API project (minimal scaffold, no domain logic yet)
+api/CheckPoint.Api/   .NET 10 Web API (Dockerfile, health check, EF Core + Postgres, no domain entities yet)
 CheckPoint.slnx       .NET solution file
-web/                  React + Tailwind frontend (Vite scaffold, placeholder page only)
+web/                  React + Tailwind frontend (Dockerfile, nginx, runtime-configurable API_BASE_URL)
+docker-compose.yml    Full local stack: db + api + web
 ```
 
 ## Running locally
 
-The `dotnet` SDK is not assumed to be installed locally — this project was scaffolded
-and built using the `mcr.microsoft.com/dotnet/sdk:10.0` Docker image. Use whichever of
-these you have available:
+Prefer `docker compose up --build` from the repo root (see README) — it needs only
+Docker, no local SDK/Node install. For running pieces individually:
 
 ```bash
 # Backend — with a local SDK
@@ -69,10 +73,14 @@ npm install
 npm run dev
 ```
 
+Environment variable names are kept identical between local Docker Compose and the
+(future) Azure deployment — `ConnectionStrings__Default` for the API, `API_BASE_URL`
+for the frontend — so config is copy-paste-compatible between environments.
+
 ## Current state
 
-This repo currently contains only the initial scaffold (empty API + empty React app,
-both building successfully). No Dockerfiles, Docker Compose, CI/CD, Azure resources,
-EF Core/Postgres wiring, or feedback-tool domain logic exist yet — those are all
-upcoming Linear issues, starting with milestone "1. Infrastructure & Tooling"
-(CBLT-203 through CBLT-209).
+Milestone 1 (Infrastructure & Tooling): containerisation (CBLT-203, CBLT-204) and
+Docker Compose (CBLT-207) are done. Remaining: CI/CD (CBLT-208, partially blocked —
+build/test doesn't need Azure but pushing images does), test project scaffolding
+(CBLT-209), and Azure provisioning (CBLT-205/206, on hold pending Azure access). No
+feedback-tool domain logic exists yet — that starts at Milestone 2.
