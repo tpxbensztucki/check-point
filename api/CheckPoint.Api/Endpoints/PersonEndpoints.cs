@@ -23,6 +23,12 @@ public record PersonResponse(
     Guid? LineManagerId,
     Guid? HeadOfPracticeId);
 
+// PracticeId is required when RoleName is RoleNames.PracticeLead (designates which
+// Practice the Person owns as its lead) and ignored otherwise.
+public record AssignRoleRequest(string RoleName, Guid? PracticeId);
+
+public record PersonRolesResponse(Guid PersonId, IReadOnlyList<string> Roles);
+
 public static class PersonEndpoints
 {
     public static void MapPersonEndpoints(this WebApplication app)
@@ -130,6 +136,86 @@ public static class PersonEndpoints
                 person.PracticeId,
                 person.LineManagerId,
                 person.HeadOfPracticeId));
+        });
+
+        group.MapPost("/{personId:guid}/roles", async (
+            Guid personId, AssignRoleRequest request, CheckPointDbContext db) =>
+        {
+            var person = await db.People.Include(p => p.Roles).SingleOrDefaultAsync(p => p.Id == personId);
+            if (person is null)
+            {
+                return Results.NotFound($"No Person found with id {personId}.");
+            }
+
+            var role = await db.Roles.SingleOrDefaultAsync(r => r.Name == request.RoleName);
+            if (role is null)
+            {
+                return Results.BadRequest($"'{request.RoleName}' is not a valid role name.");
+            }
+
+            if (person.Roles.Any(r => r.Id == role.Id))
+            {
+                return Results.BadRequest($"Person already holds the '{request.RoleName}' role.");
+            }
+
+            Practice? practice = null;
+            if (request.RoleName == RoleNames.PracticeLead)
+            {
+                if (request.PracticeId is not { } practiceId)
+                {
+                    return Results.BadRequest("PracticeId is required when assigning the Practice Lead role.");
+                }
+
+                practice = await db.Practices.SingleOrDefaultAsync(p => p.Id == practiceId);
+                if (practice is null)
+                {
+                    return Results.BadRequest($"No Practice found with id {practiceId}.");
+                }
+            }
+
+            person.Roles.Add(role);
+            if (practice is not null)
+            {
+                practice.PracticeLeadId = person.Id;
+            }
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new PersonRolesResponse(person.Id, person.Roles.Select(r => r.Name).ToList()));
+        });
+
+        group.MapDelete("/{personId:guid}/roles/{roleName}", async (
+            Guid personId, string roleName, CheckPointDbContext db) =>
+        {
+            var person = await db.People.Include(p => p.Roles).SingleOrDefaultAsync(p => p.Id == personId);
+            if (person is null)
+            {
+                return Results.NotFound($"No Person found with id {personId}.");
+            }
+
+            var role = person.Roles.SingleOrDefault(r => r.Name == roleName);
+            if (role is null)
+            {
+                return Results.BadRequest($"Person does not hold the '{roleName}' role.");
+            }
+
+            person.Roles.Remove(role);
+
+            // A Practice Lead who loses the role no longer owns any Practice as its
+            // lead — clear every Practice pointing at them, not just one, since a
+            // Person may lead more than one Practice.
+            if (roleName == RoleNames.PracticeLead)
+            {
+                var ledPractices = await db.Practices.Where(p => p.PracticeLeadId == person.Id).ToListAsync();
+                foreach (var practice in ledPractices)
+                {
+                    practice.PracticeLeadId = null;
+                }
+            }
+
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new PersonRolesResponse(person.Id, person.Roles.Select(r => r.Name).ToList()));
         });
     }
 }

@@ -38,7 +38,8 @@ its title.
 - **Database:** PostgreSQL via EF Core (`api/CheckPoint.Api/CheckPointDbContext.cs`),
   auto-applying pending migrations on API startup. Domain entities live in
   `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
-  `Department`/`Practice`/`Person` org fields (Milestone 3).
+  `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
+  (Milestone 3).
 - **Hosting:** Azure Container Apps — **on hold**: provisioning (CBLT-205/206) is
   deferred until Azure access is available. Everything else in Milestone 1 that
   doesn't need Azure (containerisation, Docker Compose, later CI build/test) is not
@@ -127,14 +128,22 @@ endpoints yet. The magic-link mechanism is deliberately independent of the
 guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequestId`.
 
 Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214),
-Person creation (CBLT-215), and editing a Person's details/Line Manager (CBLT-216)
-are done, all Admin-only — see "Auth (interim)" below for how "who is calling" is
-resolved ahead of real SSO. `Person` now carries `Status` (defaults to `Employed`),
-a required `Practice`, and optional self-referencing `LineManager`/`HeadOfPractice`
-links; a new Person is always created with no Roles (role assignment is a separate
-story). `PUT /people/{id}` rejects a Person being set as their own Line Manager;
-recalculating the orphaned-person flag on Line Manager change is deferred until
-that flag exists (CBLT-219).
+Person creation (CBLT-215), editing a Person's details/Line Manager (CBLT-216), and
+role assignment/removal (CBLT-217) are done, all Admin-only — see "Auth (interim)"
+below for how "who is calling" is resolved ahead of real SSO. `Person` now carries
+`Status` (defaults to `Employed`), a required `Practice`, and optional
+self-referencing `LineManager`/`HeadOfPractice` links; a new Person is always
+created with no Roles (role assignment is a separate story). `PUT /people/{id}`
+rejects a Person being set as their own Line Manager; recalculating the
+orphaned-person flag on Line Manager change is deferred until that flag exists
+(CBLT-219).
+
+`POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
+one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
+`PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
+`PracticeLeadId` on every Practice the Person leads. Re-assigning a role a Person
+already holds (e.g. to change which Practice they lead) is rejected — that's left
+for a future story, since neither the spec nor the current backlog covers it.
 
 ### Auth (interim, until CBLT-211)
 
