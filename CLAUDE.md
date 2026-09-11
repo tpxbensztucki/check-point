@@ -77,10 +77,31 @@ Environment variable names are kept identical between local Docker Compose and t
 (future) Azure deployment — `ConnectionStrings__Default` for the API, `API_BASE_URL`
 for the frontend — so config is copy-paste-compatible between environments.
 
+## Testing
+
+- **Backend unit tests** — `api/CheckPoint.Api.UnitTests`. Pure logic, no HTTP, no
+  database. Mirrors the folder structure of `api/CheckPoint.Api`. Run with:
+  `dotnet test api/CheckPoint.Api.UnitTests`
+- **Backend integration tests** — `api/CheckPoint.Api.IntegrationTests`. Boots the
+  real API via `WebApplicationFactory<Program>` against a real Postgres instance
+  started on demand with Testcontainers (`Testcontainers.PostgreSql`) — no manual
+  database setup, but Docker must be running. Anything that needs the database, EF
+  Core migrations, or a full HTTP round-trip belongs here, not in the unit test
+  project. Run with: `dotnet test api/CheckPoint.Api.IntegrationTests`
+- **Frontend unit tests** — colocated with the component/module they cover as
+  `*.test.tsx` / `*.test.ts` next to the source file (e.g. `src/App.test.tsx` next to
+  `src/App.tsx`). Uses Vitest + React Testing Library. Run with: `npm test` (in `web/`)
+- Both `dotnet test` commands need a local .NET SDK, or run them via the
+  `mcr.microsoft.com/dotnet/sdk:10.0` container the same way as other `dotnet`
+  commands in this doc (mount the repo root, `-w /src`). The integration tests also
+  need the Docker socket available to whatever runs them (Testcontainers starts and
+  stops the Postgres container itself).
+- None of these are wired into CI yet — that's CBLT-208.
+
 ## Current state
 
-Milestone 1 (Infrastructure & Tooling): containerisation (CBLT-203, CBLT-204) and
-Docker Compose (CBLT-207) are done. Remaining: CI/CD (CBLT-208, partially blocked —
-build/test doesn't need Azure but pushing images does), test project scaffolding
-(CBLT-209), and Azure provisioning (CBLT-205/206, on hold pending Azure access). No
+Milestone 1 (Infrastructure & Tooling): containerisation (CBLT-203, CBLT-204),
+Docker Compose (CBLT-207), and test project scaffolding (CBLT-209) are done.
+Remaining: CI/CD (CBLT-208 — build/test doesn't need Azure but pushing images does)
+and Azure provisioning (CBLT-205/206, on hold pending Azure access). No
 feedback-tool domain logic exists yet — that starts at Milestone 2.
