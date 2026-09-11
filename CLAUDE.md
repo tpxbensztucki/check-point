@@ -39,7 +39,8 @@ its title.
   auto-applying pending migrations on API startup. Domain entities live in
   `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
   `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
-  (Milestone 3), and `Project`/`ProjectMembership`/`Poc` (Milestone 4).
+  (Milestone 3), `Project`/`ProjectMembership`/`Poc` (Milestone 4), and
+  `FeedbackRequest` (Milestone 5).
 - **API structure — standing pattern for every feature area**: `Endpoints/` holds
   only routing (`MapGroup`/`RequireAuthorization` wiring, thin lambdas that bind a
   request, call one service method, and map the result to an `IResult`); request/
@@ -199,14 +200,12 @@ explicit join entity, `ProjectMembership` (not an implicit many-to-many like
 need somewhere to attach state to a specific Person-Project pairing. `DELETE
 /projects/{id}/people/{personId}` soft-deletes — sets `RemovedAt` rather than
 deleting the row — so a Person's history on a Project survives removal, per this
-story's acceptance criteria. Adding a Leaver to a Project is rejected; enrolling a
-newly-added Person into that Project's New Starter cycle is deferred until the
-cycle engine exists (Milestone 5). `POST /projects/{id}/complete` performs only the
-status transition itself (rejecting an already-Completed Project) — cancelling
-that Project's outstanding feedback requests and excluding it from future cycle
-scheduling are likewise deferred until the `FeedbackRequest` entity and cycle
-engine exist; completing a Project never touches the Person's own status or their
-other Projects.
+story's acceptance criteria. Adding a Leaver to a Project is rejected; adding a
+Person also now schedules their New Starter cycle (CBLT-226, see below).
+`POST /projects/{id}/complete` performs the status transition (rejecting an
+already-Completed Project) and cancels every still-`Scheduled` `FeedbackRequest`
+tied to the Project (CBLT-226); completing a Project never touches the Person's
+own status or their other Projects.
 
 Assigning POCs (CBLT-223) is scoped to one Person's `ProjectMembership` (`Poc`
 entity, cascade-deletes with its membership since it's meaningless without one).
@@ -218,11 +217,12 @@ active POC yet) is computed fresh on every read, never stored. `PUT`/`DELETE
 .../pocs/{pocId}` (CBLT-224, same three-way authorization) edit or hard-delete a
 single POC — no "history" requirement exists for POCs the way it does for
 `ProjectMembership`, so removal is a real delete, not a soft one. Cancelling a
-removed POC's outstanding feedback request is deferred (no `FeedbackRequest`
-entity yet, Milestone 5); correcting a POC's email has no effect on already-sent
-magic links since `MagicLink` only ever carries an opaque `FeedbackRequestId`,
-never the POC's email — that acceptance criterion is already satisfied
-structurally, no code needed for it.
+removed POC's outstanding feedback request is still deferred (removing a POC isn't
+the same as completing a Project, and the dispatch job that would need to look
+this up doesn't exist yet, Milestone 7); correcting a POC's email has no effect on
+already-sent magic links since `MagicLink` only ever carries an opaque
+`FeedbackRequestId`, never the POC's email — that acceptance criterion is already
+satisfied structurally, no code needed for it.
 
 `GET /people/{personId}/projects` (CBLT-225) lists every Project a Person is
 currently on, with per-Active-Project `MissingStandardRoles` (`null` for a
@@ -232,6 +232,27 @@ Practice; Line Manager: own reports) — the same manual-check pattern as Leaver
 Practice-view, living in `ProjectService.GetProjectsForPersonAsync`. The missing-
 roles computation itself is shared with `PocService` via
 `Domain/PocRoleHelpers.cs` rather than duplicated.
+
+Milestone 5 (Feedback Cycle Engine): New Starter cycle scheduling (CBLT-226) is
+done. The `FeedbackRequest` entity now exists — one row per scheduled request,
+carrying `ProjectMembershipId`, `ScheduledFor`, and a `Status`
+(`Scheduled`/`Sent`/`Cancelled`) — but it deliberately carries no snapshot of which
+POCs to send to; the dispatch job (Milestone 7, not built yet) resolves the
+Project's currently assigned POCs at send time, satisfying that acceptance
+criterion by construction. `ProjectService.AddPersonAsync` schedules one
+`FeedbackRequest` per configured interval (default 2/4/8 weeks) relative to the
+Person's own `ProjectMembership.JoinedAt`, not the Project's creation date, so
+staggered starters get staggered schedules. Interval config
+(`NewStarterCycleOptions`, bound from the `NewStarterCycle` configuration section)
+is an interim stand-in for CBLT-252 (Admin Settings: Configure New Starter
+interval schedule) — changing it via config/env var already satisfies "not
+hardcoded," it just isn't editable through the app itself yet; when CBLT-252
+lands, only where the value is read from changes, not `AddPersonAsync`'s logic.
+`ProjectService.CompleteProjectAsync` now also cancels every still-`Scheduled`
+`FeedbackRequest` tied to the Project, closing out that part of CBLT-222's
+originally-deferred scope. `MagicLink.FeedbackRequestId` remains a bare,
+unconstrained `Guid` rather than a real FK to `FeedbackRequest` — that decoupling
+was a deliberate CBLT-213 design choice and isn't revisited here.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

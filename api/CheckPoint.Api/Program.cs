@@ -20,6 +20,8 @@ builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<OrgTreeService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<PocService>();
+builder.Services.Configure<NewStarterCycleOptions>(
+    builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
 // SSO) exists — see its own doc comment. It must never run in Production, so the
