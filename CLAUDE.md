@@ -151,9 +151,10 @@ guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequest
 
 Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214),
 Person creation (CBLT-215), editing a Person's details/Line Manager (CBLT-216),
-role assignment/removal (CBLT-217), marking a Person as Leaver (CBLT-218), and
-cross-practice visibility/orphan detection (CBLT-219) are done — see "Auth
-(interim)" below for how "who is calling" is resolved ahead of
+role assignment/removal (CBLT-217), marking a Person as Leaver (CBLT-218),
+cross-practice visibility/orphan detection (CBLT-219), and the scoped org tree
+view (CBLT-220) are done — see "Auth (interim)" below for how "who is calling" is
+resolved ahead of
 real SSO. Everything under `/people` is Admin-only except `POST
 /people/{id}/leaver`, which a Line Manager may also call for their own reports
 (checked manually in the handler against `Person.LineManagerId`, since it isn't a
@@ -170,8 +171,19 @@ every read (not a stored column), so it can never go stale when either Person's
 Practice or Line Manager changes later — no separate recalculation step needed.
 Since the endpoint filters to one Practice before returning results, a Line
 Manager tagged to a different Practice never appears in another Practice's list,
-even though their report (tagged to that Practice) does, flagged Orphaned. `Person`
-now carries
+even though their report (tagged to that Practice) does, flagged Orphaned.
+
+`GET /org-tree` (any authenticated caller — the three-role scoping happens inside
+`OrgTreeService`, not a group-level policy) returns a forest of `OrgPersonNode`,
+each with nested `Reports`. Visibility is a union of whatever the caller's roles
+grant: Admin sees everyone; Practice Lead sees everyone tagged to a Practice they
+lead; Line Manager sees themselves plus exactly their direct reports (not deeper).
+A Person whose Line Manager falls outside the caller's visible set becomes a root
+in the returned forest rather than being dropped — the same rule
+`GetPracticePeopleForViewerAsync` uses. A caller holding none of the three roles
+gets back an empty list, not a 403. The tree-building code also guards against a
+manager cycle in the data (e.g. two edits leaving A → B → A) to avoid infinite
+recursion. `Person` now carries
 `Status` (defaults to `Employed`), a required `Practice`, and optional
 self-referencing `LineManager`/`HeadOfPractice` links; a new Person is always
 created with no Roles (role assignment is a separate story). `PUT /people/{id}`
