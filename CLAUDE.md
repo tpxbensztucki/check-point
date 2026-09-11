@@ -254,6 +254,18 @@ originally-deferred scope. `MagicLink.FeedbackRequestId` remains a bare,
 unconstrained `Guid` rather than a real FK to `FeedbackRequest` — that decoupling
 was a deliberate CBLT-213 design choice and isn't revisited here.
 
+`FeedbackRequest` also now carries a `Stage` (`FeedbackRequestStage`:
+`NewStarterWeek2`/`Week4`/`Week6`/`Week8`), separate from `Status` — needed so the
+cycle engine can recognise "the 4-week check-in" reliably rather than inferring it
+from `ScheduledFor` minus `JoinedAt`, which would break under a reconfigured
+interval set. `FeedbackCycleService.HandleCheckInFlaggedAsync` (CBLT-227) is the
+auto-insert-a-6-week-check-in hook: flagging a `NewStarterWeek4` request schedules
+one `NewStarterWeek6` request (idempotent — a second flag is a no-op), flagging
+any other stage does nothing. **Not wired to any endpoint** — the unified flag
+action itself doesn't exist yet (CBLT-239, Milestone 8; CBLT-230 is the ticket that
+will call this hook from it) — so this is tested by calling the service directly,
+same style as `ProjectServiceSchedulingTests`/`MagicLinkServiceTests`.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

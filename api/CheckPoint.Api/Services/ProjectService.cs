@@ -9,6 +9,13 @@ namespace CheckPoint.Api.Services;
 public class ProjectService(
     CheckPointDbContext db, TimeProvider timeProvider, IOptions<NewStarterCycleOptions> newStarterCycleOptions)
 {
+    private static readonly FeedbackRequestStage[] NewStarterStages =
+    [
+        FeedbackRequestStage.NewStarterWeek2,
+        FeedbackRequestStage.NewStarterWeek4,
+        FeedbackRequestStage.NewStarterWeek8,
+    ];
+
     public async Task<ProjectCreationResult> CreateProjectAsync(
         string name, CancellationToken cancellationToken = default)
     {
@@ -151,12 +158,19 @@ public class ProjectService(
         // staggered schedules. Which POCs to send to is deliberately not resolved
         // or stored here — the dispatch job (Milestone 7) looks up the Project's
         // currently assigned POCs at send time.
-        foreach (var weeks in newStarterCycleOptions.Value.IntervalWeeks)
+        //
+        // IntervalWeeks is assumed to have exactly three entries, one per fixed
+        // New Starter stage identity below (2/4/8-week by default) — reconfiguring
+        // the shape of this array, not just its values, is a bigger change left to
+        // CBLT-252 (Admin Settings) to define.
+        var intervalWeeks = newStarterCycleOptions.Value.IntervalWeeks;
+        for (var i = 0; i < intervalWeeks.Length && i < NewStarterStages.Length; i++)
         {
             db.FeedbackRequests.Add(new FeedbackRequest
             {
                 ProjectMembership = membership,
-                ScheduledFor = joinedAt.AddDays(weeks * 7),
+                ScheduledFor = joinedAt.AddDays(intervalWeeks[i] * 7),
+                Stage = NewStarterStages[i],
             });
         }
 
