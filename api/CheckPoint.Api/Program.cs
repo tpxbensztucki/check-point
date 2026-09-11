@@ -20,6 +20,7 @@ builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<OrgTreeService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<PocService>();
+builder.Services.AddScoped<FeedbackCycleService>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
 

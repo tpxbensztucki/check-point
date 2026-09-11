@@ -17,4 +17,5 @@ public class FeedbackRequest
 
     public DateTimeOffset ScheduledFor { get; set; }
     public FeedbackRequestStatus Status { get; set; } = FeedbackRequestStatus.Scheduled;
+    public FeedbackRequestStage Stage { get; set; }
 }
