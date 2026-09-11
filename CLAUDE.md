@@ -126,12 +126,15 @@ endpoints yet. The magic-link mechanism is deliberately independent of the
 `FeedbackRequest` entity (which doesn't exist yet — Milestone 5) and of the
 guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequestId`.
 
-Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214)
-and Person creation (CBLT-215) are done, both Admin-only — see "Auth (interim)"
-below for how "who is calling" is resolved ahead of real SSO. `Person` now carries
-`Status` (defaults to `Employed`), a required `Practice`, and optional
-self-referencing `LineManager`/`HeadOfPractice` links; a new Person is always
-created with no Roles (role assignment is a separate story).
+Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214),
+Person creation (CBLT-215), and editing a Person's details/Line Manager (CBLT-216)
+are done, all Admin-only — see "Auth (interim)" below for how "who is calling" is
+resolved ahead of real SSO. `Person` now carries `Status` (defaults to `Employed`),
+a required `Practice`, and optional self-referencing `LineManager`/`HeadOfPractice`
+links; a new Person is always created with no Roles (role assignment is a separate
+story). `PUT /people/{id}` rejects a Person being set as their own Line Manager;
+recalculating the orphaned-person flag on Line Manager change is deferred until
+that flag exists (CBLT-219).
 
 ### Auth (interim, until CBLT-211)
 
