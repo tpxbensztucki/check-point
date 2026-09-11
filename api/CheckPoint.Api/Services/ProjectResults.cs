@@ -41,6 +41,20 @@ public record ProjectMembershipResult(ProjectMembershipStatus Status, ProjectMem
         new(ProjectMembershipStatus.ProjectNotFound, null, error);
 }
 
+public enum PersonProjectsStatus { Success, PersonNotFound, Forbidden }
+
+public record PersonProjectsResult(PersonProjectsStatus Status, IReadOnlyList<PersonProjectSummary>? Projects, string? Error)
+{
+    public static PersonProjectsResult Success(IReadOnlyList<PersonProjectSummary> projects) =>
+        new(PersonProjectsStatus.Success, projects, null);
+
+    public static PersonProjectsResult PersonNotFound(string error) =>
+        new(PersonProjectsStatus.PersonNotFound, null, error);
+
+    public static PersonProjectsResult Forbidden() =>
+        new(PersonProjectsStatus.Forbidden, null, null);
+}
+
 public enum ProjectMembershipRemovalStatus { Removed, ProjectNotFound, MembershipNotFound }
 
 public record ProjectMembershipRemovalResult(ProjectMembershipRemovalStatus Status, string? Error)

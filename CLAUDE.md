@@ -224,6 +224,15 @@ magic links since `MagicLink` only ever carries an opaque `FeedbackRequestId`,
 never the POC's email — that acceptance criterion is already satisfied
 structurally, no code needed for it.
 
+`GET /people/{personId}/projects` (CBLT-225) lists every Project a Person is
+currently on, with per-Active-Project `MissingStandardRoles` (`null` for a
+Completed Project, since completeness stops being meaningful there). Visibility
+follows the same role scoping as the org tree (Admin: all; Practice Lead: own
+Practice; Line Manager: own reports) — the same manual-check pattern as Leaver and
+Practice-view, living in `ProjectService.GetProjectsForPersonAsync`. The missing-
+roles computation itself is shared with `PocService` via
+`Domain/PocRoleHelpers.cs` rather than duplicated.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
