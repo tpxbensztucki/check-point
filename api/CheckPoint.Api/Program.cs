@@ -18,6 +18,7 @@ builder.Services.AddScoped<MagicLinkService>();
 builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<PersonService>();
 builder.Services.AddScoped<OrgTreeService>();
+builder.Services.AddScoped<ProjectService>();
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
 // SSO) exists — see its own doc comment. It must never run in Production, so the
@@ -81,6 +82,7 @@ app.MapHealthChecks("/health");
 app.MapDepartmentEndpoints();
 app.MapPersonEndpoints();
 app.MapOrgTreeEndpoints();
+app.MapProjectEndpoints();
 
 var summaries = new[]
 {
