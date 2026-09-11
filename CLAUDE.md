@@ -116,6 +116,10 @@ Docker Compose (CBLT-207), test project scaffolding (CBLT-209), and PR/main CI
 rest of CBLT-208) and Azure provisioning (CBLT-205/206), both on hold pending Azure
 access.
 
-Milestone 2 (Roles, Permissions & Auth): the Person↔Role data model (CBLT-210) is
-done. AD SSO, RBAC enforcement, and the guest magic-link scaffolding are not yet
-implemented.
+Milestone 2 (Roles, Permissions & Auth): the Person↔Role data model (CBLT-210) and
+the magic-link mechanism for guest respondents (CBLT-213 —
+`api/CheckPoint.Api/Services/MagicLinkService.cs`) are done. AD SSO and RBAC
+enforcement are not yet implemented. The magic-link mechanism is deliberately
+independent of the `FeedbackRequest` entity (which doesn't exist yet — Milestone 5)
+and of the guest-facing form itself (Milestone 6); it only knows an opaque
+`FeedbackRequestId`.
