@@ -18,5 +18,12 @@ public class ProjectMembership
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
 
+    // Null while still in the New Starter cycle; set once by
+    // FeedbackCycleService.HandleFeedbackRequestCompletedAsync (CBLT-228) when the
+    // final New Starter request (NewStarterWeek8) concludes, and never cleared
+    // again — this is both the transition guard (idempotency) and, for CBLT-229,
+    // the anchor date FY-quarter General-cycle scheduling will count from.
+    public DateTimeOffset? GeneralCycleEnrolledAt { get; set; }
+
     public ICollection<Poc> Pocs { get; set; } = new List<Poc>();
 }

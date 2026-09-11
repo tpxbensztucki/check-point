@@ -70,7 +70,7 @@ public class FeedbackCycleServiceTests : IAsyncLifetime
             var fourWeekRequest = await context.FeedbackRequests.SingleAsync(
                 r => r.ProjectMembershipId == membershipId && r.Stage == FeedbackRequestStage.NewStarterWeek4);
 
-            var service = new FeedbackCycleService(context);
+            var service = new FeedbackCycleService(context, TimeProvider.System);
             await service.HandleCheckInFlaggedAsync(fourWeekRequest.Id);
         }
 
@@ -95,7 +95,7 @@ public class FeedbackCycleServiceTests : IAsyncLifetime
             var request = await context.FeedbackRequests.SingleAsync(
                 r => r.ProjectMembershipId == membershipId && r.Stage == stage);
 
-            var service = new FeedbackCycleService(context);
+            var service = new FeedbackCycleService(context, TimeProvider.System);
             await service.HandleCheckInFlaggedAsync(request.Id);
         }
 
@@ -117,7 +117,7 @@ public class FeedbackCycleServiceTests : IAsyncLifetime
             var fourWeekRequest = await context.FeedbackRequests.SingleAsync(
                 r => r.ProjectMembershipId == membershipId && r.Stage == FeedbackRequestStage.NewStarterWeek4);
 
-            var service = new FeedbackCycleService(context);
+            var service = new FeedbackCycleService(context, TimeProvider.System);
             await service.HandleCheckInFlaggedAsync(fourWeekRequest.Id);
             await service.HandleCheckInFlaggedAsync(fourWeekRequest.Id);
         }
@@ -135,7 +135,7 @@ public class FeedbackCycleServiceTests : IAsyncLifetime
     {
         await using var context = CreateContext();
         await context.Database.MigrateAsync();
-        var service = new FeedbackCycleService(context);
+        var service = new FeedbackCycleService(context, TimeProvider.System);
 
         await service.HandleCheckInFlaggedAsync(Guid.NewGuid());
 
