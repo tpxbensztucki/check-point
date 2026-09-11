@@ -39,7 +39,7 @@ its title.
   auto-applying pending migrations on API startup. Domain entities live in
   `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
   `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
-  (Milestone 3).
+  (Milestone 3), and `Project`/`ProjectMembership` (Milestone 4).
 - **API structure — standing pattern for every feature area**: `Endpoints/` holds
   only routing (`MapGroup`/`RequireAuthorization` wiring, thin lambdas that bind a
   request, call one service method, and map the result to an `IResult`); request/
@@ -190,6 +190,17 @@ created with no Roles (role assignment is a separate story). `PUT /people/{id}`
 rejects a Person being set as their own Line Manager; recalculating the
 orphaned-person flag on Line Manager change is deferred until that flag exists
 (CBLT-219).
+
+Milestone 4 (Project & POC Management): creating a Project and adding/removing a
+Person (CBLT-221) is done, Admin-only. `Project` has a `Status` (defaults to
+`Active`); `Person`<->`Project` is an explicit join entity, `ProjectMembership`
+(not an implicit many-to-many like `Person`/`Role`), because a Person's per-Project
+feedback cycle (Milestone 5) will need somewhere to attach state to a specific
+Person-Project pairing. `DELETE /projects/{id}/people/{personId}` soft-deletes —
+sets `RemovedAt` rather than deleting the row — so a Person's history on a Project
+survives removal, per this story's acceptance criteria. Adding a Leaver to a
+Project is rejected; enrolling a newly-added Person into that Project's New
+Starter cycle is deferred until the cycle engine exists (Milestone 5).
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

@@ -10,6 +10,8 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Practice> Practices => Set<Practice>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<ProjectMembership> ProjectMemberships => Set<ProjectMembership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +50,21 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .HasOne(p => p.PracticeLead)
             .WithMany()
             .HasForeignKey(p => p.PracticeLeadId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Restrict rather than cascade: removing a Person from a Project sets
+        // ProjectMembership.RemovedAt (soft delete) instead of deleting the row, so
+        // neither Project nor Person should ever cascade-delete membership history.
+        modelBuilder.Entity<ProjectMembership>()
+            .HasOne(m => m.Project)
+            .WithMany(p => p.Memberships)
+            .HasForeignKey(m => m.ProjectId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ProjectMembership>()
+            .HasOne(m => m.Person)
+            .WithMany()
+            .HasForeignKey(m => m.PersonId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
