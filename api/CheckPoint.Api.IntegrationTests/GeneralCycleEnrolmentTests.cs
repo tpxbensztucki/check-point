@@ -76,7 +76,10 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, new FakeTimeProvider(DateTimeOffset.Parse("2026-03-01T00:00:00Z")));
+            var service = new FeedbackCycleService(
+                context,
+                new FakeTimeProvider(DateTimeOffset.Parse("2026-03-01T00:00:00Z")),
+                Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestId);
         }
 
@@ -95,7 +98,8 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, new FakeTimeProvider(DateTimeOffset.UtcNow));
+            var service = new FeedbackCycleService(
+                context, new FakeTimeProvider(DateTimeOffset.UtcNow), Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(requestId);
         }
 
@@ -113,14 +117,14 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, firstCompletionTime);
+            var service = new FeedbackCycleService(context, firstCompletionTime, Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestId);
         }
 
         await using (var context = CreateContext())
         {
             var laterTime = new FakeTimeProvider(DateTimeOffset.Parse("2026-04-01T00:00:00Z"));
-            var service = new FeedbackCycleService(context, laterTime);
+            var service = new FeedbackCycleService(context, laterTime, Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestId);
         }
 
@@ -144,7 +148,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, TimeProvider.System);
+            var service = new FeedbackCycleService(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestId);
         }
 
@@ -168,7 +172,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, TimeProvider.System);
+            var service = new FeedbackCycleService(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestId);
         }
 
@@ -196,7 +200,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new FeedbackCycleService(context, TimeProvider.System);
+            var service = new FeedbackCycleService(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
             await service.HandleFeedbackRequestCompletedAsync(finalRequestAId);
         }
 
@@ -212,7 +216,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
     {
         await using var context = CreateContext();
         await context.Database.MigrateAsync();
-        var service = new FeedbackCycleService(context, TimeProvider.System);
+        var service = new FeedbackCycleService(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
 
         await service.HandleFeedbackRequestCompletedAsync(Guid.NewGuid());
     }

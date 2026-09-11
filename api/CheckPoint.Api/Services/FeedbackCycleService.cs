@@ -1,13 +1,17 @@
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CheckPoint.Api.Services;
 
 // Cross-cutting cycle-engine effects that aren't tied to a single Project or
-// Person CRUD operation (spec Section 5). Grows alongside the rest of Milestone 5
-// (General cycle scheduling, FY-quarter logic, etc.).
-public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvider)
+// Person CRUD operation (spec Section 5). Grows alongside the rest of Milestone 5.
+public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvider, IOptions<GeneralCycleOptions> generalCycleOptions)
 {
+    // FY quarters run Apr-Jun / Jul-Sep / Oct-Dec / Jan-Mar (spec Section 5.2), so
+    // boundaries fall on the 1st of these calendar months, in year order.
+    private static readonly int[] QuarterStartMonths = [1, 4, 7, 10];
+
     // Called by the unified flag action's cycle-engine hook (CBLT-230) whenever a
     // check-in's feedback is flagged. Not wired to any endpoint yet since the flag
     // action itself doesn't exist (CBLT-239, Milestone 8) — this is the hook CBLT-
@@ -53,9 +57,10 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
     // Called whenever a FeedbackRequest's lifecycle concludes for any reason — a
     // guest submitting it (Milestone 6) or it reaching its No Response expiry
     // (CBLT-237, Milestone 7). Neither trigger exists yet, so this is a hook ready
-    // for them to call, not wired to anything itself. NewStarterWeek8 is always
-    // the last New Starter stage chronologically, whether or not a Week6 was ever
-    // inserted (spec Section 5.1/5.2), so that's the one that triggers enrolment.
+    // for them to call, not wired to anything itself. Dispatches by Stage: the
+    // final New Starter request (CBLT-228) enrols into the General cycle and
+    // schedules its first request; a General request (CBLT-229) schedules the
+    // next FY-quarter one. Every other stage has no effect here.
     public async Task HandleFeedbackRequestCompletedAsync(
         Guid feedbackRequestId, CancellationToken cancellationToken = default)
     {
@@ -64,25 +69,106 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
             .Include(r => r.ProjectMembership).ThenInclude(m => m.Person)
             .SingleOrDefaultAsync(r => r.Id == feedbackRequestId, cancellationToken);
 
-        if (request is null || request.Stage != FeedbackRequestStage.NewStarterWeek8)
+        if (request is null)
         {
             return;
         }
 
+        switch (request.Stage)
+        {
+            case FeedbackRequestStage.NewStarterWeek8:
+                await EnrolIntoGeneralCycleAsync(request, cancellationToken);
+                break;
+            case FeedbackRequestStage.General:
+                await ScheduleNextGeneralCycleRequestAsync(request, cancellationToken);
+                break;
+        }
+    }
+
+    // NewStarterWeek8 is always the last New Starter stage chronologically,
+    // whether or not a Week6 was ever inserted (spec Section 5.1/5.2).
+    private async Task EnrolIntoGeneralCycleAsync(FeedbackRequest request, CancellationToken cancellationToken)
+    {
         var membership = request.ProjectMembership;
+
+        // Per Person per Project: this only ever inspects the one membership tied
+        // to the completed request, so a Person's other Projects are untouched.
         if (membership.GeneralCycleEnrolledAt is not null)
         {
             return;
         }
 
-        // Per Person per Project: this only ever inspects the one membership tied
-        // to the completed request, so a Person's other Projects are untouched.
         if (membership.Project.Status == ProjectStatus.Completed || membership.Person.Status == PersonStatus.Leaver)
         {
             return;
         }
 
-        membership.GeneralCycleEnrolledAt = timeProvider.GetUtcNow();
+        var enrolledAt = timeProvider.GetUtcNow();
+        membership.GeneralCycleEnrolledAt = enrolledAt;
+
+        // Skip the immediately-next quarter boundary if it's too close to bother
+        // scheduling a first request for (spec Section 5.2) — go straight to the
+        // one after instead.
+        var skipThreshold = TimeSpan.FromDays(generalCycleOptions.Value.SkipThresholdWeeks * 7);
+        var nextBoundary = NextQuarterBoundaryOnOrAfter(enrolledAt);
+        if (nextBoundary - enrolledAt < skipThreshold)
+        {
+            nextBoundary = nextBoundary.AddMonths(3);
+        }
+
+        db.FeedbackRequests.Add(new FeedbackRequest
+        {
+            ProjectMembershipId = membership.Id,
+            ScheduledFor = nextBoundary,
+            Stage = FeedbackRequestStage.General,
+        });
+
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    // Continues quarterly for as long as the Project stays Active and the Person
+    // stays Employed (spec Section 5.2) — anchored to the completed request's own
+    // ScheduledFor (always the 1st of a quarter-start month), not to "now", so the
+    // cadence never drifts based on when a request happens to be processed.
+    private async Task ScheduleNextGeneralCycleRequestAsync(FeedbackRequest request, CancellationToken cancellationToken)
+    {
+        var membership = request.ProjectMembership;
+        if (membership.Project.Status == ProjectStatus.Completed || membership.Person.Status == PersonStatus.Leaver)
+        {
+            return;
+        }
+
+        var alreadyScheduledNext = await db.FeedbackRequests.AnyAsync(
+            r => r.ProjectMembershipId == membership.Id
+                && r.Stage == FeedbackRequestStage.General
+                && r.ScheduledFor > request.ScheduledFor,
+            cancellationToken);
+        if (alreadyScheduledNext)
+        {
+            return;
+        }
+
+        db.FeedbackRequests.Add(new FeedbackRequest
+        {
+            ProjectMembershipId = membership.Id,
+            ScheduledFor = request.ScheduledFor.AddMonths(3),
+            Stage = FeedbackRequestStage.General,
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static DateTimeOffset NextQuarterBoundaryOnOrAfter(DateTimeOffset from)
+    {
+        foreach (var month in QuarterStartMonths)
+        {
+            var candidate = new DateTimeOffset(from.Year, month, 1, 0, 0, 0, TimeSpan.Zero);
+            if (candidate >= from)
+            {
+                return candidate;
+            }
+        }
+
+        return new DateTimeOffset(from.Year + 1, 1, 1, 0, 0, 0, TimeSpan.Zero);
     }
 }
