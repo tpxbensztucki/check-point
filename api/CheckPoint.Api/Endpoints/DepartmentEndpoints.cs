@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,18 @@ public record CreateDepartmentRequest(string Name);
 public record CreatePracticeRequest(string Name);
 public record DepartmentResponse(Guid Id, string Name);
 public record PracticeResponse(Guid Id, string Name, Guid DepartmentId);
+
+// IsOrphaned is true when LineManagerId is unset, or the Line Manager's own
+// PracticeId differs from this Person's (spec Section 2) — computed on every read,
+// not stored, so it can never go stale when either Person's Practice or Line
+// Manager changes.
+public record PracticePersonResponse(
+    Guid Id,
+    string FullName,
+    PersonStatus Status,
+    Guid? LineManagerId,
+    Guid? HeadOfPracticeId,
+    bool IsOrphaned);
 
 public static class DepartmentEndpoints
 {
@@ -51,6 +64,46 @@ public static class DepartmentEndpoints
             return Results.Created(
                 $"/departments/{departmentId}/practices/{practice.Id}",
                 new PracticeResponse(practice.Id, practice.Name, practice.DepartmentId));
+        });
+
+        // Visibility follows Practice tags, not reporting lines (spec Section 2):
+        // Admin sees any Practice's people, a Practice Lead only their own
+        // Practice's — not a plain role check, so this route needs its own group
+        // requiring only authentication plus a manual ownership check below.
+        var practiceViewGroup = app.MapGroup("/practices").RequireAuthorization();
+
+        practiceViewGroup.MapGet("/{practiceId:guid}/people", async (
+            Guid practiceId, ClaimsPrincipal caller, CheckPointDbContext db) =>
+        {
+            var practice = await db.Practices.SingleOrDefaultAsync(p => p.Id == practiceId);
+            if (practice is null)
+            {
+                return Results.NotFound($"No Practice found with id {practiceId}.");
+            }
+
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var isLeadOfThisPractice = caller.IsInRole(RoleNames.PracticeLead) && practice.PracticeLeadId == callerId;
+            if (!caller.IsInRole(RoleNames.Admin) && !isLeadOfThisPractice)
+            {
+                return Results.Forbid();
+            }
+
+            // Filtering to this PracticeId before projecting is what keeps a Line
+            // Manager tagged to a different Practice out of the results, even
+            // though one of their reports (tagged here) is included and flagged
+            // Orphaned.
+            var people = await db.People
+                .Where(p => p.PracticeId == practiceId)
+                .Select(p => new PracticePersonResponse(
+                    p.Id,
+                    p.FullName,
+                    p.Status,
+                    p.LineManagerId,
+                    p.HeadOfPracticeId,
+                    p.LineManagerId == null || p.LineManager!.PracticeId != p.PracticeId))
+                .ToListAsync();
+
+            return Results.Ok(people);
         });
     }
 }
