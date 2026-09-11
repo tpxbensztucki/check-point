@@ -39,7 +39,7 @@ its title.
   auto-applying pending migrations on API startup. Domain entities live in
   `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
   `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
-  (Milestone 3), and `Project`/`ProjectMembership` (Milestone 4).
+  (Milestone 3), and `Project`/`ProjectMembership`/`Poc` (Milestone 4).
 - **API structure — standing pattern for every feature area**: `Endpoints/` holds
   only routing (`MapGroup`/`RequireAuthorization` wiring, thin lambdas that bind a
   request, call one service method, and map the result to an `IResult`); request/
@@ -207,6 +207,15 @@ that Project's outstanding feedback requests and excluding it from future cycle
 scheduling are likewise deferred until the `FeedbackRequest` entity and cycle
 engine exist; completing a Project never touches the Person's own status or their
 other Projects.
+
+Assigning POCs (CBLT-223) is scoped to one Person's `ProjectMembership` (`Poc`
+entity, cascade-deletes with its membership since it's meaningless without one).
+`POST`/`GET /projects/{id}/people/{personId}/pocs` are callable by Admin, the
+Practice Lead of the target Person's Practice, or the Line Manager of the target
+Person — a three-way manual check in `PocService`, the same pattern as the Leaver
+and Practice-view endpoints. `MissingStandardRoles` (which of Tech/DM/Other have no
+active POC yet) is computed fresh on every read, never stored. Editing/removing a
+POC is a separate story (CBLT-224) and isn't implemented here.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

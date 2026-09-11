@@ -17,4 +17,6 @@ public class ProjectMembership
 
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
+
+    public ICollection<Poc> Pocs { get; set; } = new List<Poc>();
 }
