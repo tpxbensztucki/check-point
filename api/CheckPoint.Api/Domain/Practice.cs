@@ -11,4 +11,10 @@ public class Practice
     public Department Department { get; set; } = null!;
 
     public ICollection<Person> People { get; set; } = new List<Person>();
+
+    // The Person designated as this Practice's owner when they hold the "Practice
+    // Lead" Role for it (spec Section 2/3) — set/cleared alongside that Role
+    // assignment, see PersonEndpoints role endpoints.
+    public Guid? PracticeLeadId { get; set; }
+    public Person? PracticeLead { get; set; }
 }

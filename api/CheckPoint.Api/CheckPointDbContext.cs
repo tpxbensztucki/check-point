@@ -43,5 +43,11 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .WithMany()
             .HasForeignKey(p => p.HeadOfPracticeId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Practice>()
+            .HasOne(p => p.PracticeLead)
+            .WithMany()
+            .HasForeignKey(p => p.PracticeLeadId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
