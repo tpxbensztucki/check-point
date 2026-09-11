@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using CheckPoint.Api.Auth;
 using CheckPoint.Api.Domain;
-using CheckPoint.Api.Endpoints;
+using CheckPoint.Api.Contracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;

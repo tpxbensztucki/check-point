@@ -15,6 +15,8 @@ builder.Services.AddDbContext<CheckPointDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<MagicLinkService>();
+builder.Services.AddScoped<DepartmentService>();
+builder.Services.AddScoped<PersonService>();
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
 // SSO) exists — see its own doc comment. It must never run in Production, so the
