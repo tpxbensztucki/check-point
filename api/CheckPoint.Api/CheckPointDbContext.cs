@@ -8,6 +8,8 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<Person> People => Set<Person>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
+    public DbSet<Department> Departments => Set<Department>();
+    public DbSet<Practice> Practices => Set<Practice>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
