@@ -38,6 +38,53 @@ public static class PocEndpoints
             };
         });
 
+        group.MapPut("/{pocId:guid}", async (
+            Guid projectId, Guid personId, Guid pocId, CreatePocRequest request, ClaimsPrincipal caller, PocService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.UpdatePocAsync(
+                projectId,
+                personId,
+                pocId,
+                request,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocMutationStatus.Success => Results.Ok(result.Pocs),
+                PocMutationStatus.MembershipNotFound => Results.NotFound(result.Error),
+                PocMutationStatus.PocNotFound => Results.NotFound(result.Error),
+                PocMutationStatus.Forbidden => Results.Forbid(),
+                _ => Results.BadRequest(result.Error),
+            };
+        });
+
+        group.MapDelete("/{pocId:guid}", async (
+            Guid projectId, Guid personId, Guid pocId, ClaimsPrincipal caller, PocService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.RemovePocAsync(
+                projectId,
+                personId,
+                pocId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocMutationStatus.Success => Results.Ok(result.Pocs),
+                PocMutationStatus.MembershipNotFound => Results.NotFound(result.Error),
+                PocMutationStatus.PocNotFound => Results.NotFound(result.Error),
+                PocMutationStatus.Forbidden => Results.Forbid(),
+                _ => Results.BadRequest(result.Error),
+            };
+        });
+
         group.MapGet("/", async (Guid projectId, Guid personId, ClaimsPrincipal caller, PocService service) =>
         {
             var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);

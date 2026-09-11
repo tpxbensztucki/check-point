@@ -214,8 +214,15 @@ entity, cascade-deletes with its membership since it's meaningless without one).
 Practice Lead of the target Person's Practice, or the Line Manager of the target
 Person — a three-way manual check in `PocService`, the same pattern as the Leaver
 and Practice-view endpoints. `MissingStandardRoles` (which of Tech/DM/Other have no
-active POC yet) is computed fresh on every read, never stored. Editing/removing a
-POC is a separate story (CBLT-224) and isn't implemented here.
+active POC yet) is computed fresh on every read, never stored. `PUT`/`DELETE
+.../pocs/{pocId}` (CBLT-224, same three-way authorization) edit or hard-delete a
+single POC — no "history" requirement exists for POCs the way it does for
+`ProjectMembership`, so removal is a real delete, not a soft one. Cancelling a
+removed POC's outstanding feedback request is deferred (no `FeedbackRequest`
+entity yet, Milestone 5); correcting a POC's email has no effect on already-sent
+magic links since `MagicLink` only ever carries an opaque `FeedbackRequestId`,
+never the POC's email — that acceptance criterion is already satisfied
+structurally, no code needed for it.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
