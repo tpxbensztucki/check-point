@@ -76,6 +76,7 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/health");
 app.MapDepartmentEndpoints();
+app.MapPersonEndpoints();
 
 var summaries = new[]
 {

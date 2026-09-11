@@ -12,12 +12,13 @@ using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
-public class DepartmentEndpointsTests : IAsyncLifetime
+public class PersonEndpointsTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
     private WebApplicationFactory<Program> _factory = null!;
     private Guid _adminPersonId;
     private Guid _nonAdminPersonId;
+    private Guid _practiceId;
 
     public async Task InitializeAsync()
     {
@@ -40,12 +41,17 @@ public class DepartmentEndpointsTests : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
 
         var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
-        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        var admin = new Person { FullName = "Alex Admin", Roles = [adminRole], PracticeId = Guid.Empty };
+        var nonAdmin = new Person { FullName = "Sam NonAdmin", PracticeId = Guid.Empty };
+
+        var department = new Department { Name = "Tech & Data" };
+        var practice = new Practice { Name = "Software Engineering", Department = department };
         db.Practices.Add(practice);
         await db.SaveChangesAsync();
+        _practiceId = practice.Id;
 
-        var admin = new Person { FullName = "Alex Admin", PracticeId = practice.Id, Roles = [adminRole] };
-        var nonAdmin = new Person { FullName = "Sam NonAdmin", PracticeId = practice.Id };
+        admin.PracticeId = practice.Id;
+        nonAdmin.PracticeId = practice.Id;
         db.People.AddRange(admin, nonAdmin);
         await db.SaveChangesAsync();
 
@@ -71,61 +77,82 @@ public class DepartmentEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Admin_CanCreateDepartment()
-    {
-        using var client = CreateClient(_adminPersonId);
-
-        var response = await client.PostAsJsonAsync("/departments", new CreateDepartmentRequest("Tech & Data"));
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var department = await response.Content.ReadFromJsonAsync<DepartmentResponse>();
-        Assert.Equal("Tech & Data", department!.Name);
-    }
-
-    [Fact]
-    public async Task Admin_CanCreatePracticeUnderAnExistingDepartment()
-    {
-        using var client = CreateClient(_adminPersonId);
-        var departmentResponse = await client.PostAsJsonAsync(
-            "/departments", new CreateDepartmentRequest("Tech & Data"));
-        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>();
-
-        var response = await client.PostAsJsonAsync(
-            $"/departments/{department!.Id}/practices", new CreatePracticeRequest("Software Engineering"));
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var practice = await response.Content.ReadFromJsonAsync<PracticeResponse>();
-        Assert.Equal("Software Engineering", practice!.Name);
-        Assert.Equal(department.Id, practice.DepartmentId);
-    }
-
-    [Fact]
-    public async Task PracticeCannotBeCreatedUnderANonexistentDepartment()
+    public async Task Admin_CanCreatePerson_DefaultsToEmployedWithNoRolesAndNoLineManager()
     {
         using var client = CreateClient(_adminPersonId);
 
         var response = await client.PostAsJsonAsync(
-            $"/departments/{Guid.NewGuid()}/practices", new CreatePracticeRequest("Software Engineering"));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        Assert.Equal("Jamie Newhire", person!.FullName);
+        Assert.Equal(PersonStatus.Employed, person.Status);
+        Assert.Equal(_practiceId, person.PracticeId);
+        Assert.Null(person.LineManagerId);
+        Assert.Null(person.HeadOfPracticeId);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
+        var saved = await db.People.Include(p => p.Roles).SingleAsync(p => p.Id == person.Id);
+        Assert.Empty(saved.Roles);
     }
 
     [Fact]
-    public async Task NonAdmin_CannotCreateDepartment()
+    public async Task Admin_CanCreatePersonWithLineManagerAndHeadOfPractice()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsJsonAsync(
+            "/people",
+            new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, _adminPersonId));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        Assert.Equal(_adminPersonId, person!.LineManagerId);
+        Assert.Equal(_adminPersonId, person.HeadOfPracticeId);
+    }
+
+    [Fact]
+    public async Task PersonCannotBeCreatedWithANonexistentPractice()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PersonCannotBeCreatedWithANonexistentLineManager()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, Guid.NewGuid(), null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotCreatePerson()
     {
         using var client = CreateClient(_nonAdminPersonId);
 
-        var response = await client.PostAsJsonAsync("/departments", new CreateDepartmentRequest("Tech & Data"));
+        var response = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task UnauthenticatedCaller_CannotCreateDepartment()
+    public async Task UnauthenticatedCaller_CannotCreatePerson()
     {
         using var client = CreateClient();
 
-        var response = await client.PostAsJsonAsync("/departments", new CreateDepartmentRequest("Tech & Data"));
+        var response = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

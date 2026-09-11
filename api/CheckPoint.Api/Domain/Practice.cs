@@ -9,4 +9,6 @@ public class Practice
 
     public Guid DepartmentId { get; set; }
     public Department Department { get; set; } = null!;
+
+    public ICollection<Person> People { get; set; } = new List<Person>();
 }

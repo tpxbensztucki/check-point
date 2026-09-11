@@ -22,6 +22,14 @@ public class PersonRolePersistenceTests : IAsyncLifetime
         return new CheckPointDbContext(options);
     }
 
+    private static async Task<Guid> SeedPracticeAsync(CheckPointDbContext context)
+    {
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        context.Practices.Add(practice);
+        await context.SaveChangesAsync();
+        return practice.Id;
+    }
+
     [Fact]
     public async Task Migration_SeedsExactlyTheThreeValidRoles()
     {
@@ -44,10 +52,12 @@ public class PersonRolePersistenceTests : IAsyncLifetime
 
             var practiceLead = await setup.Roles.SingleAsync(r => r.Name == RoleNames.PracticeLead);
             var lineManager = await setup.Roles.SingleAsync(r => r.Name == RoleNames.LineManager);
+            var practiceId = await SeedPracticeAsync(setup);
 
             setup.People.Add(new Person
             {
                 FullName = "Alex Doe",
+                PracticeId = practiceId,
                 Roles = [practiceLead, lineManager],
             });
             await setup.SaveChangesAsync();
@@ -71,8 +81,9 @@ public class PersonRolePersistenceTests : IAsyncLifetime
             await setup.Database.MigrateAsync();
 
             var admin = await setup.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
-            setup.People.Add(new Person { FullName = "Alex Doe", Roles = [admin] });
-            setup.People.Add(new Person { FullName = "Sam Doe", Roles = [admin] });
+            var practiceId = await SeedPracticeAsync(setup);
+            setup.People.Add(new Person { FullName = "Alex Doe", PracticeId = practiceId, Roles = [admin] });
+            setup.People.Add(new Person { FullName = "Sam Doe", PracticeId = practiceId, Roles = [admin] });
             await setup.SaveChangesAsync();
         }
 
