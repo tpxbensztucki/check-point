@@ -22,6 +22,31 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider)
         return ProjectCreationResult.Created(new ProjectResponse(project.Id, project.Name, project.Status));
     }
 
+    // Cancelling outstanding feedback requests and excluding the Project from
+    // future cycle scheduling (spec Section 3) are deferred until the
+    // FeedbackRequest entity and cycle engine exist (Milestone 5) — this only
+    // performs the status transition itself, independent of any Person's
+    // Employed/Leaver status or their other Projects.
+    public async Task<ProjectCompletionResult> CompleteProjectAsync(
+        Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var project = await db.Projects.SingleOrDefaultAsync(p => p.Id == projectId, cancellationToken);
+        if (project is null)
+        {
+            return ProjectCompletionResult.ProjectNotFound($"No Project found with id {projectId}.");
+        }
+
+        if (project.Status == ProjectStatus.Completed)
+        {
+            return ProjectCompletionResult.Invalid("Project is already Completed.");
+        }
+
+        project.Status = ProjectStatus.Completed;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return ProjectCompletionResult.Completed(new ProjectResponse(project.Id, project.Name, project.Status));
+    }
+
     public async Task<ProjectMembershipResult> AddPersonAsync(
         Guid projectId, Guid personId, CancellationToken cancellationToken = default)
     {
