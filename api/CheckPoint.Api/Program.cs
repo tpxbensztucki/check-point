@@ -1,5 +1,8 @@
 using CheckPoint.Api;
+using CheckPoint.Api.Auth;
+using CheckPoint.Api.Endpoints;
 using CheckPoint.Api.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +15,31 @@ builder.Services.AddDbContext<CheckPointDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<MagicLinkService>();
+
+// DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
+// SSO) exists — see its own doc comment. It must never run in Production, so the
+// core auth services are always registered (UseAuthentication/UseAuthorization need
+// them present regardless of environment), but the scheme itself -- and making it
+// the default -- is only added outside Production. In Production, with no scheme
+// registered, everyone is anonymous and [Authorize]-protected endpoints reject
+// every request (fail closed) until real SSO is wired up.
+var authenticationBuilder = builder.Services.AddAuthentication(options =>
+{
+    if (!builder.Environment.IsProduction())
+    {
+        options.DefaultScheme = DevPersonAuthenticationHandler.SchemeName;
+        options.DefaultAuthenticateScheme = DevPersonAuthenticationHandler.SchemeName;
+        options.DefaultChallengeScheme = DevPersonAuthenticationHandler.SchemeName;
+    }
+});
+
+if (!builder.Environment.IsProduction())
+{
+    authenticationBuilder.AddScheme<AuthenticationSchemeOptions, DevPersonAuthenticationHandler>(
+        DevPersonAuthenticationHandler.SchemeName, _ => { });
+}
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
@@ -43,7 +71,11 @@ if (!runningInContainer && app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapHealthChecks("/health");
+app.MapDepartmentEndpoints();
 
 var summaries = new[]
 {

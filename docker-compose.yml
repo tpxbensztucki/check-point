@@ -21,6 +21,11 @@ services:
       dockerfile: api/Dockerfile
     environment:
       ASPNETCORE_HTTP_PORTS: "8080"
+      # Enables the DevPersonAuthenticationHandler stand-in for local development
+      # (see CheckPoint.Api/Auth/DevPersonAuthenticationHandler.cs) — never set this
+      # in a real deployment, where it must default to Production so that scheme is
+      # not registered.
+      ASPNETCORE_ENVIRONMENT: "Development"
       ConnectionStrings__Default: "Host=db;Port=5432;Database=checkpoint;Username=checkpoint;Password=checkpoint"
     ports:
       - "8080:8080"

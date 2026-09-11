@@ -118,8 +118,40 @@ access.
 
 Milestone 2 (Roles, Permissions & Auth): the Person↔Role data model (CBLT-210) and
 the magic-link mechanism for guest respondents (CBLT-213 —
-`api/CheckPoint.Api/Services/MagicLinkService.cs`) are done. AD SSO and RBAC
-enforcement are not yet implemented. The magic-link mechanism is deliberately
-independent of the `FeedbackRequest` entity (which doesn't exist yet — Milestone 5)
-and of the guest-facing form itself (Milestone 6); it only knows an opaque
-`FeedbackRequestId`.
+`api/CheckPoint.Api/Services/MagicLinkService.cs`) are done. AD SSO (CBLT-211) is not
+yet implemented, and full RBAC enforcement per the Section 8 permission matrix
+(CBLT-212) is **blocked** — the design spec that would define the actual matrix
+isn't available (see below), and most of the actions it would gate don't exist as
+endpoints yet. The magic-link mechanism is deliberately independent of the
+`FeedbackRequest` entity (which doesn't exist yet — Milestone 5) and of the
+guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequestId`.
+
+Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214)
+is done, including a real Admin-only authorization check — see "Auth (interim)"
+below for how "who is calling" is resolved ahead of real SSO.
+
+### Auth (interim, until CBLT-211)
+
+There is no real sign-in yet. `api/CheckPoint.Api/Auth/DevPersonAuthenticationHandler.cs`
+is a stand-in: the caller identifies themselves via a `DevPersonId` header carrying
+an existing `Person`'s `Id`, and the handler loads that Person's `Role`s from the
+database to build the ASP.NET Core role claims `[Authorize(Roles = ...)]` checks
+against. This means permissions are already DB-driven (via the Person↔Role model
+from CBLT-210) — when CBLT-211 replaces this with real AD SSO, only the *identity*
+resolution changes (validating an AAD token instead of a header, then looking up the
+matching Person), not the underlying role/claims model.
+
+This scheme is registered only outside the `Production` environment (see
+`Program.cs`) — in `Production`, no scheme is registered at all, so every
+`[Authorize]`-protected endpoint rejects every request until real SSO exists
+(fails closed rather than granting access). Local Docker Compose sets
+`ASPNETCORE_ENVIRONMENT=Development` on the `api` service specifically so this
+stand-in works for local testing; never set that in a real deployment.
+
+To call a protected endpoint locally, pass an existing Person's id:
+```bash
+curl -X POST http://localhost:8080/departments \
+  -H "Content-Type: application/json" \
+  -H "DevPersonId: <an-admin-persons-guid>" \
+  -d '{"name":"Tech & Data"}'
+```
