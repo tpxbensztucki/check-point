@@ -624,6 +624,13 @@ real tickets) mounts inside; the placeholder `HomePage` is gone, replaced by
 `ComingSoonPage` placeholder until CBLT-243/244/245 replace them one at a
 time, each in its own PR.
 
+CBLT-245 (`OrgTreePage` at `/dashboard/org-tree`) replaces that section's
+`ComingSoonPage` placeholder from CBLT-304 — the first of Milestone 9's three
+real ticketed screens. No backend change: `GET /org-tree` (CBLT-220) was
+already fully role-scoped, so this is purely frontend wiring, satisfying the
+ticket's own "no duplicate tree implementation" AC. `OrgTreeNode` recurses
+over `Reports` to render the forest at arbitrary depth.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

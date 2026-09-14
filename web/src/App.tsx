@@ -4,6 +4,7 @@ import RequireCurrentPerson from './components/RequireCurrentPerson'
 import ComingSoonPage from './pages/ComingSoonPage'
 import DashboardHomePage from './pages/DashboardHomePage'
 import GuestFeedbackPage from './pages/GuestFeedbackPage'
+import OrgTreePage from './pages/OrgTreePage'
 import SignInPage from './pages/SignInPage'
 
 function App() {
@@ -18,7 +19,7 @@ function App() {
             <Route index element={<DashboardHomePage />} />
             <Route path="outstanding-requests" element={<ComingSoonPage title="Outstanding Requests" />} />
             <Route path="flagged-people" element={<ComingSoonPage title="Flagged / Under Review" />} />
-            <Route path="org-tree" element={<ComingSoonPage title="Org Tree" />} />
+            <Route path="org-tree" element={<OrgTreePage />} />
           </Route>
         </Route>
       </Routes>
