@@ -51,6 +51,15 @@ public class TriggerAdHocReviewServiceTests : IAsyncLifetime
         return person.Id;
     }
 
+    private async Task<Guid> CreateLineManagerAsync()
+    {
+        await using var context = CreateContext();
+        var manager = new Person { FullName = "Morgan Manager", PracticeId = _practiceId };
+        context.People.Add(manager);
+        await context.SaveChangesAsync();
+        return manager.Id;
+    }
+
     private async Task<Guid> CreatePracticeLeadAsync(Guid practiceId)
     {
         await using var context = CreateContext();
@@ -68,7 +77,7 @@ public class TriggerAdHocReviewServiceTests : IAsyncLifetime
     [Fact]
     public async Task ThePersonsOwnLineManager_CanTriggerAnAdHocReview()
     {
-        var lineManagerId = Guid.NewGuid();
+        var lineManagerId = await CreateLineManagerAsync();
         var personId = await CreatePersonAsync(lineManagerId);
 
         await using var context = CreateContext();
@@ -125,7 +134,7 @@ public class TriggerAdHocReviewServiceTests : IAsyncLifetime
     [Fact]
     public async Task TriggeringTwice_SurfacesTheExistingPendingCatchUpInsteadOfDuplicating()
     {
-        var lineManagerId = Guid.NewGuid();
+        var lineManagerId = await CreateLineManagerAsync();
         var personId = await CreatePersonAsync(lineManagerId);
 
         await using var context = CreateContext();
@@ -145,7 +154,7 @@ public class TriggerAdHocReviewServiceTests : IAsyncLifetime
     [Fact]
     public async Task AnAdHocReview_NeverInsertsASixWeekRequest()
     {
-        var lineManagerId = Guid.NewGuid();
+        var lineManagerId = await CreateLineManagerAsync();
         var personId = await CreatePersonAsync(lineManagerId);
 
         await using var context = CreateContext();
@@ -168,7 +177,7 @@ public class TriggerAdHocReviewServiceTests : IAsyncLifetime
     [Fact]
     public async Task AnAdHocCatchUpAlreadyPending_DoesNotSuppressALaterFourWeekCheckInsSixWeekInsert()
     {
-        var lineManagerId = Guid.NewGuid();
+        var lineManagerId = await CreateLineManagerAsync();
         var personId = await CreatePersonAsync(lineManagerId);
 
         await using var context = CreateContext();
