@@ -399,6 +399,38 @@ parameter. Whether a given POC has responded is always answered by whether a
 `FeedbackSubmission` row exists for that `(FeedbackRequestId, PocId)` pair —
 never stored as a status on `FeedbackRequest` itself.
 
+Milestone 7 (Notifications & Response Tracking): CBLT-234 (`RequestDispatchService`)
+sends the POC feedback request email containing a magic link. One `MagicLink` (and
+one email) per currently-assigned POC on the request's `ProjectMembership` — each
+scoped to that POC and that request only, per CBLT-302's fix. Two entry points:
+`DispatchDueAutomaticRequestsAsync` (the Automatic-mode driver, polled every minute
+by `RequestDispatchBackgroundService`, an `IHostedService`) and `DispatchManuallyAsync`
+(the authorised-user trigger, `POST /feedback-requests/{id}/dispatch`, same
+Admin-or-LM-or-PracticeLead scoping as `PocService`). The global mode is
+`RequestDispatchOptions.Mode` (`Automatic`/`Manual`, config-bound, interim until
+CBLT-254's Admin Settings toggle exists) — the background job only sends when
+`Automatic`; the manual endpoint works regardless of mode, since an authorised user
+can always force a send. `RequestDispatchBackgroundService` is **not registered in
+the "Testing" environment** (see `Program.cs`): it runs on real wall-clock time via
+`Task.Delay`, which would otherwise fire unpredictably against tests that advance a
+`FakeTimeProvider` instead of real time.
+
+Actual email sending is behind a new `IEmailSender` interface — `SmtpEmailSender` is
+the real implementation (BCL `SmtpClient`, configured via `SmtpOptions`; no SMTP
+server exists in any environment this project has run in yet, so `SmtpOptions.Host`
+defaults empty and a misconfigured deployment fails loudly rather than pretending to
+send). Tests substitute a `RecordingEmailSender` fake (same reasoning as
+`FakeTimeProvider`). The frontend URL embedded in each email comes from a new
+`FrontendOptions.BaseUrl` (config-bound, plain infra — not tied to any Admin Settings
+ticket), wired via `Frontend__BaseUrl` in `docker-compose.yml`.
+
+A due request whose `ProjectMembership.RemovedAt` is set (the person left the
+project after the request was scheduled) is marked `Cancelled` instead of sent,
+mirroring `ProjectService.CompleteProjectAsync`'s existing cancel-on-completion
+behaviour for the narrower per-Person case. A due request with zero currently
+assigned POCs is left `Scheduled` and retried on the next automatic pass rather
+than being marked `Sent` with nothing actually sent.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
