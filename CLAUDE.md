@@ -846,6 +846,31 @@ plus two new tests: raising the Tech target to 2 flags a Project with only
 one Tech POC as incomplete, and assigning a POC beyond a role's target is
 still allowed and never flagged missing.
 
+## Milestone 11 (Data Protection & Audit)
+
+CBLT-250 (guest contact details captured fresh per project, no reuse) is a
+verification-and-hardening ticket, not new build: confirmed via direct
+reads that the data model already satisfies every clause of its AC.
+`Poc` (`Domain/Poc.cs`) is "never an existing system user, just a name/
+email/relationship snapshot" scoped one-to-one to a `ProjectMembership` —
+`PocService.AssignPocAsync` always inserts a brand-new row straight from
+the request body, with no lookup, no matching-by-name/email, and no FK to
+any shared "contact" entity. No endpoint anywhere lists `Poc` rows across
+memberships/Projects (the only two `GET .../pocs` routes are both scoped
+to one specific `(projectId, personId)` pair) — there is no standing
+directory to reuse from, structurally. The frontend's `PocManager` form
+(`ProjectDetailPage.tsx`) uses plain `<input>` fields with no `list`/
+datalist wiring and no lookup fetch on change. Added a new integration
+test, `TheSamePersonAssignedAsPocOnTwoProjects_AreIndependentRecords`,
+proving the same name/email assigned as a POC on two different Projects
+produces two independently-`Id`'d rows where editing one never affects the
+other — the existing `PocsAreScopedToOneMembership_NotSharedAcrossProjects`
+test already proved the narrower "assigning on A doesn't leak to B", but
+not this "explicitly assigning the same details on both stays independent"
+case. Added a frontend regression test confirming typing in the POC name/
+email fields triggers no additional network call, closing the loop on the
+ticket's "no autocomplete/suggestion" BDD scenario.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

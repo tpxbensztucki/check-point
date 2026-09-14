@@ -163,6 +163,26 @@ describe('ProjectDetailPage', () => {
     )
   })
 
+  // CBLT-250: guest contact details are captured fresh per project — typing
+  // into the POC name/email fields must never trigger a lookup against any
+  // other project's POC data (no autocomplete/suggestion fetch).
+  it('typing in the POC form triggers no additional network calls', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('Riley Report')
+    await user.click(screen.getByRole('button', { name: /manage pocs/i }))
+    await screen.findByText(/jamie internal/i)
+
+    const callCountBeforeTyping = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length
+    const form = screen.getByPlaceholderText(/^name$/i).closest('form')!
+    await user.type(within(form).getByPlaceholderText(/^name$/i), 'Casey External')
+    await user.type(within(form).getByPlaceholderText(/^email$/i), 'casey@example.com')
+
+    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callCountBeforeTyping)
+  })
+
   it('removing a POC calls the endpoint', async () => {
     stubFetch()
     const user = userEvent.setup()
