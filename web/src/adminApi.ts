@@ -290,3 +290,40 @@ export async function removePoc(projectId: string, personId: string, pocId: stri
   )
   return response.ok
 }
+
+export type AuditAction = 'View' | 'Export'
+
+// Mirrors CheckPoint.Api/Contracts/AuditLogContracts.cs. Backs the Admin
+// Audit Log screen (CBLT-249).
+export interface AuditLogEntry {
+  id: string
+  viewerId: string
+  viewerName: string
+  personId: string
+  personName: string
+  action: AuditAction
+  occurredAt: string
+}
+
+export interface AuditLogFilter {
+  personId?: string
+  viewerId?: string
+  from?: string
+  to?: string
+}
+
+export async function fetchAuditLog(filter: AuditLogFilter): Promise<AuditLogEntry[]> {
+  const params = new URLSearchParams()
+  if (filter.personId) params.set('personId', filter.personId)
+  if (filter.viewerId) params.set('viewerId', filter.viewerId)
+  if (filter.from) params.set('from', filter.from)
+  if (filter.to) params.set('to', filter.to)
+
+  const query = params.toString()
+  const response = await authorizedFetch(`/audit-log${query ? `?${query}` : ''}`)
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as AuditLogEntry[]
+}
