@@ -1,3 +1,4 @@
+using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
@@ -8,6 +9,7 @@ namespace CheckPoint.Api.IntegrationTests;
 public class MagicLinkServiceTests : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
+    private Guid _pocId;
 
     public async Task InitializeAsync()
     {
@@ -15,6 +17,35 @@ public class MagicLinkServiceTests : IAsyncLifetime
 
         await using var context = CreateContext(TimeProvider.System);
         await context.Database.MigrateAsync();
+
+        // PocId is a real FK (CBLT-302) — every link in these tests needs an
+        // actual Poc row to point at, even though FeedbackRequestId stays a bare,
+        // unconstrained Guid (CBLT-213's deliberate decoupling).
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        context.Practices.Add(practice);
+        await context.SaveChangesAsync();
+
+        var person = new Person { FullName = "Riley Reviewee", PracticeId = practice.Id };
+        var project = new Project { Name = "Website Revamp" };
+        context.People.Add(person);
+        context.Projects.Add(project);
+        await context.SaveChangesAsync();
+
+        var membership = new ProjectMembership { ProjectId = project.Id, PersonId = person.Id, JoinedAt = DateTimeOffset.UtcNow };
+        context.ProjectMemberships.Add(membership);
+        await context.SaveChangesAsync();
+
+        var poc = new Poc
+        {
+            ProjectMembershipId = membership.Id,
+            Name = "Jamie POC",
+            Email = "jamie@example.com",
+            Relationship = PocRelationship.Internal,
+            Role = PocRole.Tech,
+        };
+        context.Pocs.Add(poc);
+        await context.SaveChangesAsync();
+        _pocId = poc.Id;
     }
 
     public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
@@ -35,7 +66,7 @@ public class MagicLinkServiceTests : IAsyncLifetime
         string token;
         await using (var context = CreateContext(time))
         {
-            var link = await new MagicLinkService(context, time).IssueAsync(feedbackRequestId);
+            var link = await new MagicLinkService(context, time).IssueAsync(feedbackRequestId, _pocId);
             token = link.Token;
         }
 
@@ -54,7 +85,7 @@ public class MagicLinkServiceTests : IAsyncLifetime
         string token;
         await using (var context = CreateContext(time))
         {
-            var link = await new MagicLinkService(context, time).IssueAsync(Guid.NewGuid());
+            var link = await new MagicLinkService(context, time).IssueAsync(Guid.NewGuid(), _pocId);
             token = link.Token;
         }
 
@@ -73,7 +104,7 @@ public class MagicLinkServiceTests : IAsyncLifetime
         string token;
         await using (var context = CreateContext(time))
         {
-            var link = await new MagicLinkService(context, time).IssueAsync(Guid.NewGuid());
+            var link = await new MagicLinkService(context, time).IssueAsync(Guid.NewGuid(), _pocId);
             token = link.Token;
         }
 

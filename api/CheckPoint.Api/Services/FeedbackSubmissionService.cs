@@ -41,12 +41,16 @@ public class FeedbackSubmissionService(CheckPointDbContext db, TimeProvider time
 
         var now = timeProvider.GetUtcNow();
 
+        // FeedbackRequest.Status is untouched here — it tracks the request's own
+        // dispatch lifecycle (Scheduled/Sent/Cancelled), not response state,
+        // since a request can have several POCs each responding independently
+        // (see FeedbackRequestStatus's own doc comment).
         link!.UsedAt = now;
-        feedbackRequest.Status = FeedbackRequestStatus.Sent;
 
         var submission = new FeedbackSubmission
         {
             FeedbackRequestId = feedbackRequest.Id,
+            PocId = link.PocId,
             DoingWell = request.DoingWell,
             NotDoingWell = request.NotDoingWell,
             NeedsToImprove = request.NeedsToImprove,

@@ -23,13 +23,14 @@ public class MagicLinkService(CheckPointDbContext db, TimeProvider timeProvider)
             .TrimEnd('=');
     }
 
-    public async Task<MagicLink> IssueAsync(Guid feedbackRequestId, CancellationToken cancellationToken = default)
+    public async Task<MagicLink> IssueAsync(Guid feedbackRequestId, Guid pocId, CancellationToken cancellationToken = default)
     {
         var now = timeProvider.GetUtcNow();
         var link = new MagicLink
         {
             Token = GenerateToken(),
             FeedbackRequestId = feedbackRequestId,
+            PocId = pocId,
             IssuedAt = now,
             ExpiresAt = now + ValidityPeriod,
         };
