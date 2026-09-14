@@ -598,6 +598,32 @@ from whether `FeedbackRequestId` is set) so consumers don't have to re-derive
 it themselves — the ticket's own AC calls out "trigger source" as a field the
 history view must show.
 
+Milestone 9 (Admin/Practice Lead Dashboard): **CBLT-304 (prerequisite, not a
+spec ticket)** builds the dashboard shell and a dev-only sign-in stand-in —
+none of CBLT-243/244/245 could land without somewhere to attach their
+sections, and the frontend had no concept of "who is signed in" at all before
+this (everything before it was either backend-only or the unauthenticated
+guest flow). New `GET /dev/people` (`Endpoints/DevEndpoints.cs`,
+`DevPersonDirectoryService`) is deliberately unauthenticated — it exists so a
+sign-in picker has something to search *before* the viewer has any identity,
+the same bootstrapping problem `DevPersonAuthenticationHandler` itself never
+had to solve (a curl caller already knows a Person's id). Registered only
+outside `Production`, the same gate as the dev auth scheme itself, and both
+will be deleted together once CBLT-211 (real AD SSO) lands. On the frontend,
+`web/src/auth/currentPerson.ts` is a small localStorage-backed accessor (not
+a React context) holding `{ id, fullName, roles }`; `api.ts`'s new
+`authorizedFetch` attaches it as the `DevPersonId` header on every dashboard
+call, while the existing guest-facing functions stay untouched and
+unauthenticated. `SignInPage` is a searchable person-switcher (deliberately
+not a single fixed identity) so Admin/Practice Lead/Line Manager scoping can
+actually be exercised and compared in the browser — the entire point of a
+switcher over a hardcoded id. `DashboardLayout` + `RequireCurrentPerson` are
+the shell and route guard every dashboard screen (this milestone's three
+real tickets) mounts inside; the placeholder `HomePage` is gone, replaced by
+`/` redirecting to `/dashboard`. The three dashboard sections render a
+`ComingSoonPage` placeholder until CBLT-243/244/245 replace them one at a
+time, each in its own PR.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
