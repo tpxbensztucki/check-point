@@ -250,4 +250,34 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task ThePersonsOwnLineManager_CanFlagTheirCheckIn()
+    {
+        using var client = CreateClient(_lineManagerPersonId);
+
+        var response = await client.PostAsync($"/feedback-requests/{_requestId}/flag", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ALineManagerWithNoRelationToThePerson_CannotFlagTheirCheckIn()
+    {
+        using var client = CreateClient(_otherLineManagerPersonId);
+
+        var response = await client.PostAsync($"/feedback-requests/{_requestId}/flag", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task FlaggingAnUnknownRequest_ReturnsNotFound()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsync($"/feedback-requests/{Guid.NewGuid()}/flag", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }

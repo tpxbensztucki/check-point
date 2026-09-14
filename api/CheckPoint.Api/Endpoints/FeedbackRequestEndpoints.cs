@@ -76,5 +76,27 @@ public static class FeedbackRequestEndpoints
                 _ => Results.Problem(),
             };
         });
+
+        // Two-way (Admin or the Person's own Line Manager only) — see
+        // FeedbackCycleService.FlagCheckInAsync's own doc comment for why this
+        // is narrower than the three-way check every other route in this file
+        // uses.
+        group.MapPost("/{id:guid}/flag", async (Guid id, ClaimsPrincipal caller, FeedbackCycleService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.FlagCheckInAsync(
+                id,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                FlagStatus.Flagged => Results.Ok(result.CatchUp),
+                FlagStatus.RequestNotFound => Results.NotFound(result.Error),
+                FlagStatus.Forbidden => Results.Forbid(),
+                _ => Results.Problem(),
+            };
+        });
     }
 }
