@@ -209,7 +209,8 @@ public class PocEndpointsTests : IAsyncLifetime
 
         await adminClient.DeleteAsync($"{PocsPath()}/{pocIdOnFirstProject}");
 
-        var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(otherProjectPocsPath);
+        var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(
+            otherProjectPocsPath, JsonTestOptions.Value);
         Assert.Single(otherProjectPocs!.Pocs);
     }
 
@@ -348,7 +349,7 @@ public class PocEndpointsTests : IAsyncLifetime
             PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
 
         var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(
-            $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs");
+            $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs", JsonTestOptions.Value);
 
         Assert.Empty(otherProjectPocs!.Pocs);
     }
