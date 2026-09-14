@@ -4,13 +4,12 @@ namespace CheckPoint.Api.Domain;
 // CBLT-251). Exactly one row ever exists — created lazily with these defaults
 // the first time AdminSettingsService.GetAsync is called on a fresh database.
 //
-// Every field here either used to live in a hardcoded default or an interim
-// IOptions<T> config placeholder (NewStarterCycleOptions and
-// GeneralCycleOptions, both now deleted — CBLT-252/253) or still does
-// (RequestDispatchOptions, pending CBLT-254) — this table is the
-// runtime-editable home those placeholders were always going to move to.
+// Every field here used to live in a hardcoded default or an interim
+// IOptions<T> config placeholder (NewStarterCycleOptions, GeneralCycleOptions,
+// RequestDispatchOptions, all now deleted — CBLT-252/253/254) — this table is
+// the runtime-editable home those placeholders were always going to move to.
 // CBLT-251 added the table and the Admin-only read/write surface;
-// CBLT-252/253/254/255 each individually switch the consuming service from
+// CBLT-252/253/254/255 each individually switched the consuming service from
 // reading the old IOptions<T> to reading this row, one setting at a time.
 public class AppSettings
 {
@@ -24,8 +23,9 @@ public class AppSettings
     // by FeedbackCycleService.EnrolIntoGeneralCycleAsync (CBLT-253).
     public int GeneralCycleSkipThresholdWeeks { get; set; } = 4;
 
-    // CBLT-254 — whether request emails send automatically on schedule, or
-    // wait for a manual trigger.
+    // Whether request emails send automatically on schedule, or wait for a
+    // manual trigger. Consumed by
+    // RequestDispatchService.DispatchDueAutomaticRequestsAsync (CBLT-254).
     public bool AutomaticRequestSendingEnabled { get; set; } = true;
 
     // CBLT-255 — target POC counts per role, used by the completeness

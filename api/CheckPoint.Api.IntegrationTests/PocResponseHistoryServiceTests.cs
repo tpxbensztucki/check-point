@@ -54,7 +54,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
             _time,
             emailSender,
             new MagicLinkService(context, _time),
-            Options.Create(new RequestDispatchOptions()),
+            new AdminSettingsService(context),
             Options.Create(new FrontendOptions()));
 
     // Schedules a New Starter cycle (person joins, gets Week2/4/8 requests

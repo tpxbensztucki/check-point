@@ -19,12 +19,13 @@ public class RequestDispatchService(
     TimeProvider timeProvider,
     IEmailSender emailSender,
     MagicLinkService magicLinkService,
-    IOptions<RequestDispatchOptions> dispatchOptions,
+    AdminSettingsService adminSettingsService,
     IOptions<FrontendOptions> frontendOptions)
 {
     public async Task DispatchDueAutomaticRequestsAsync(CancellationToken cancellationToken = default)
     {
-        if (dispatchOptions.Value.Mode != RequestDispatchMode.Automatic)
+        var settings = await adminSettingsService.GetAsync(cancellationToken);
+        if (!settings.AutomaticRequestSendingEnabled)
         {
             return;
         }
