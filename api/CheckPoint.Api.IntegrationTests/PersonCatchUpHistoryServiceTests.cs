@@ -43,7 +43,7 @@ public class PersonCatchUpHistoryServiceTests : IAsyncLifetime
     private static CatchUpService CreateCatchUpService(CheckPointDbContext context) => new(context, TimeProvider.System);
 
     private static FeedbackCycleService CreateCycleService(CheckPointDbContext context) =>
-        new(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
+        new(context, TimeProvider.System, new AdminSettingsService(context));
 
     private async Task<Guid> CreateLineManagerAsync(Guid practiceId)
     {

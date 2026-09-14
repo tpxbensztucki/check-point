@@ -6,12 +6,11 @@ namespace CheckPoint.Api.Services;
 
 // Admin Settings screen (spec Section 13, CBLT-251) — a single, lazily-created
 // singleton row (see GetOrCreateRowAsync) covering every admin-configurable
-// value that today lives in a hardcoded default or an interim IOptions<T>
-// placeholder (NewStarterCycleOptions/GeneralCycleOptions/RequestDispatchOptions,
-// each already flagged with a comment naming the ticket that will read from
-// here instead). CBLT-251 only builds the row and this read/write surface;
-// consuming services keep reading their old IOptions<T> until CBLT-252/253/
-// 254/255 individually switch each one over.
+// value that used to live in a hardcoded default or an interim IOptions<T>
+// placeholder. CBLT-252/253 have already switched their consuming services
+// (ProjectService, FeedbackCycleService) over to reading this row instead
+// of the now-deleted NewStarterCycleOptions/GeneralCycleOptions; the
+// remaining placeholder, RequestDispatchOptions, still awaits CBLT-254/255.
 public class AdminSettingsService(CheckPointDbContext db)
 {
     public async Task<AdminSettingsResponse> GetAsync(CancellationToken cancellationToken = default)

@@ -1,13 +1,12 @@
 using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace CheckPoint.Api.Services;
 
 // Cross-cutting cycle-engine effects that aren't tied to a single Project or
 // Person CRUD operation (spec Section 5). Grows alongside the rest of Milestone 5.
-public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvider, IOptions<GeneralCycleOptions> generalCycleOptions)
+public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvider, AdminSettingsService adminSettingsService)
 {
     // The LM-facing flag action itself (spec Section 5.3, CBLT-239) — the
     // caller-aware wrapper around the pre-existing HandleCheckInFlaggedAsync
@@ -219,7 +218,8 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
         // Skip the immediately-next quarter boundary if it's too close to bother
         // scheduling a first request for (spec Section 5.2) — go straight to the
         // one after instead.
-        var skipThreshold = TimeSpan.FromDays(generalCycleOptions.Value.SkipThresholdWeeks * 7);
+        var settings = await adminSettingsService.GetAsync(cancellationToken);
+        var skipThreshold = TimeSpan.FromDays(settings.GeneralCycleSkipThresholdWeeks * 7);
         var nextBoundary = NextQuarterBoundaryOnOrAfter(enrolledAt);
         if (nextBoundary - enrolledAt < skipThreshold)
         {
