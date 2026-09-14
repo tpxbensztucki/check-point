@@ -27,6 +27,7 @@ public class FeedbackSubmissionService(CheckPointDbContext db, TimeProvider time
             {
                 MagicLinkValidationStatus.Expired => FeedbackSubmissionResult.LinkExpired,
                 MagicLinkValidationStatus.AlreadyUsed => FeedbackSubmissionResult.LinkAlreadyUsed,
+                MagicLinkValidationStatus.Superseded => FeedbackSubmissionResult.LinkSuperseded,
                 _ => FeedbackSubmissionResult.LinkNotFound,
             };
         }

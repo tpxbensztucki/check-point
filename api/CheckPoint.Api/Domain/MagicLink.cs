@@ -19,4 +19,10 @@ public class MagicLink
     public DateTimeOffset IssuedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? UsedAt { get; set; }
+
+    // Set when a manual reminder (CBLT-236) issues a fresh link for the same
+    // (FeedbackRequest, Poc) pair — distinct from UsedAt, which specifically means
+    // "consumed by a submission". A superseded link was never used; it was just
+    // replaced by a newer one.
+    public DateTimeOffset? InvalidatedAt { get; set; }
 }

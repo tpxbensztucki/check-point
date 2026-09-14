@@ -78,6 +78,11 @@ public class MagicLinkService(CheckPointDbContext db, TimeProvider timeProvider)
             return (null, MagicLinkValidationStatus.NotFound);
         }
 
+        if (link.InvalidatedAt is not null)
+        {
+            return (link, MagicLinkValidationStatus.Superseded);
+        }
+
         if (link.UsedAt is not null)
         {
             return (link, MagicLinkValidationStatus.AlreadyUsed);

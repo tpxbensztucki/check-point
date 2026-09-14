@@ -23,6 +23,8 @@ public static class MagicLinkEndpoints
                 MagicLinkValidationStatus.Expired => Results.Problem(
                     title: "This link has expired.", statusCode: StatusCodes.Status410Gone),
                 MagicLinkValidationStatus.AlreadyUsed => Results.Conflict("This feedback has already been submitted."),
+                MagicLinkValidationStatus.Superseded => Results.Problem(
+                    title: "This link has been replaced by a more recent one.", statusCode: StatusCodes.Status410Gone),
                 _ => Results.Problem(),
             };
         });
@@ -40,6 +42,8 @@ public static class MagicLinkEndpoints
                 FeedbackSubmissionStatus.LinkExpired => Results.Problem(
                     title: "This link has expired.", statusCode: StatusCodes.Status410Gone),
                 FeedbackSubmissionStatus.LinkAlreadyUsed => Results.Conflict("This feedback has already been submitted."),
+                FeedbackSubmissionStatus.LinkSuperseded => Results.Problem(
+                    title: "This link has been replaced by a more recent one.", statusCode: StatusCodes.Status410Gone),
                 _ => Results.Problem(),
             };
         });
