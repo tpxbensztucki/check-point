@@ -80,13 +80,19 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .HasForeignKey(m => m.PersonId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Restrict on the Person side (history must survive), default cascade on
-        // FeedbackRequest (a CatchUp is meaningless without the request that
-        // triggered it, same reasoning as Poc -> ProjectMembership).
+        // Restrict on both sides — history must survive either way. FeedbackRequestId
+        // is nullable (CBLT-240): an ad-hoc review's CatchUp has no check-in
+        // reference at all, unlike one created by flagging a specific check-in.
         modelBuilder.Entity<CatchUp>()
             .HasOne(c => c.Person)
             .WithMany()
             .HasForeignKey(c => c.PersonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CatchUp>()
+            .HasOne(c => c.FeedbackRequest)
+            .WithMany()
+            .HasForeignKey(c => c.FeedbackRequestId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // A POC can submit at most once per request (not once per request overall

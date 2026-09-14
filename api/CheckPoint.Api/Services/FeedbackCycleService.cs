@@ -43,7 +43,7 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
         await HandleCheckInFlaggedAsync(feedbackRequestId, cancellationToken);
 
         var catchUp = await db.CatchUps.SingleAsync(c => c.FeedbackRequestId == feedbackRequestId, cancellationToken);
-        return FlagResult.Flagged(new CatchUpResponse(catchUp.Id, catchUp.PersonId, catchUp.FeedbackRequestId, catchUp.Status, catchUp.CreatedAt));
+        return FlagResult.Flagged(ToResponse(catchUp));
     }
 
     // FY quarters run Apr-Jun / Jul-Sep / Oct-Dec / Jan-Mar (spec Section 5.2), so
@@ -78,15 +78,7 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
             return;
         }
 
-        var person = flagged.ProjectMembership.Person;
-        person.UnderReviewSince = timeProvider.GetUtcNow();
-
-        db.CatchUps.Add(new CatchUp
-        {
-            PersonId = person.Id,
-            FeedbackRequestId = flagged.Id,
-            CreatedAt = timeProvider.GetUtcNow(),
-        });
+        CreateCatchUp(flagged.ProjectMembership.Person, flagged.Id);
 
         // Scoped specifically to the New Starter cycle's 4-week stage (spec
         // Section 5.1/5.3) — flagging any other stage has no further effect here.
@@ -112,6 +104,67 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
 
         await db.SaveChangesAsync(cancellationToken);
     }
+
+    // Lets a Practice Lead or Line Manager start a review at any time,
+    // independent of a specific check-in (spec Section 5.3, CBLT-240) — same
+    // Under Review + catch-up mechanism as flagging, but never tied to a
+    // FeedbackRequest and never triggers the 6-week insert. Three-way auth via
+    // the shared helper, unlike FlagCheckInAsync's two-way check, since this
+    // ticket's own AC explicitly names both Practice Lead and Line Manager.
+    // Guards independently of HandleCheckInFlaggedAsync's own per-check-in
+    // guard: a Person can only have one *pending* CatchUp at a time from this
+    // path, but that's this method's own rule, not a change to how flagging
+    // behaves (flagging two different check-ins for the same Person still
+    // creates two CatchUps, exactly as before — see CatchUpHookTests.cs).
+    public async Task<AdHocReviewResult> TriggerAdHocReviewAsync(
+        Guid personId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId, cancellationToken);
+        if (person is null)
+        {
+            return AdHocReviewResult.PersonNotFound($"No Person found with id {personId}.");
+        }
+
+        if (!await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+                db, person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        {
+            return AdHocReviewResult.Forbidden;
+        }
+
+        var pending = await db.CatchUps.SingleOrDefaultAsync(
+            c => c.PersonId == personId && c.Status == CatchUpStatus.Pending, cancellationToken);
+        if (pending is not null)
+        {
+            return AdHocReviewResult.Triggered(ToResponse(pending), alreadyPending: true);
+        }
+
+        var catchUp = CreateCatchUp(person, feedbackRequestId: null);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return AdHocReviewResult.Triggered(ToResponse(catchUp), alreadyPending: false);
+    }
+
+    private CatchUp CreateCatchUp(Person person, Guid? feedbackRequestId)
+    {
+        person.UnderReviewSince = timeProvider.GetUtcNow();
+
+        var catchUp = new CatchUp
+        {
+            PersonId = person.Id,
+            FeedbackRequestId = feedbackRequestId,
+            CreatedAt = timeProvider.GetUtcNow(),
+        };
+        db.CatchUps.Add(catchUp);
+        return catchUp;
+    }
+
+    private static CatchUpResponse ToResponse(CatchUp catchUp) =>
+        new(catchUp.Id, catchUp.PersonId, catchUp.FeedbackRequestId, catchUp.Status, catchUp.CreatedAt);
 
     // Called whenever a FeedbackRequest's lifecycle concludes for any reason — a
     // guest submitting it (Milestone 6) or it reaching its No Response expiry

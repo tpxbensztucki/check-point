@@ -539,6 +539,31 @@ textually-supported contrast between the two tickets, not an oversight.
 `Contracts/CatchUpContracts.cs` (new) holds `CatchUpResponse` — the first
 contract for `CatchUp` itself, since no endpoint had ever touched it before.
 
+CBLT-240 (`FeedbackCycleService.TriggerAdHocReviewAsync`, `POST
+/people/{personId}/ad-hoc-review`) lets a Practice Lead or Line Manager start a
+review at any time, independent of a check-in — same `CreateCatchUp`
+mechanism as flagging (extracted as a small private helper: set
+`UnderReviewSince`, add a `CatchUp`), but with `FeedbackRequestId` left `null`
+and never triggering a 6-week insert. Three-way auth via
+`PersonAuthorizationHelpers`, unlike CBLT-239's two-way check, since this
+ticket's own AC explicitly names both roles. `CatchUp.FeedbackRequestId`
+became **nullable** for this (a real schema change — Milestone 5 only ever
+anticipated check-in-triggered catch-ups; no endpoint had touched `CatchUp` at
+all before CBLT-239, so this isn't a fix to shipped behaviour, just anticipated
+evolution). Guards independently of `HandleCheckInFlaggedAsync`'s own
+per-`FeedbackRequestId` idempotency check: `TriggerAdHocReviewAsync` looks for
+**any** `Pending` `CatchUp` for the Person (from either path) and surfaces it
+instead of creating a duplicate if one exists — but this is *this method's
+own* rule, not a change to flagging's behaviour. **Important correction from
+the original Milestone-5-era assumption**: flagging two *different* check-ins
+for the same Person still creates two separate `CatchUp` rows (proven by an
+already-passing test, `CatchUpHookTests.FlaggingDifferentCheckInsForTheSamePerson_CreatesASeparateCatchUpEach`)
+— `HandleCheckInFlaggedAsync` was deliberately left untouched rather than
+widening its guard to match the ad-hoc path's, which would have broken that.
+An ad-hoc `CatchUp` already pending for a Person never suppresses a later
+4-week check-in's 6-week insert, since the two guards are entirely
+independent of each other.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

@@ -77,5 +77,27 @@ public static class PersonEndpoints
                 _ => Results.BadRequest(result.Error),
             };
         });
+
+        // Three-way (Admin, the Person's own Line Manager, or their Practice
+        // Lead, per CBLT-240's own AC) — same looser group as leaverGroup above.
+        leaverGroup.MapPost("/{personId:guid}/ad-hoc-review", async (
+            Guid personId, ClaimsPrincipal caller, FeedbackCycleService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.TriggerAdHocReviewAsync(
+                personId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                AdHocReviewStatus.Triggered => Results.Ok(result.Review),
+                AdHocReviewStatus.PersonNotFound => Results.NotFound(result.Error),
+                AdHocReviewStatus.Forbidden => Results.Forbid(),
+                _ => Results.Problem(),
+            };
+        });
     }
 }
