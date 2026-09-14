@@ -136,6 +136,38 @@ public class PersonEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Admin_SeesEveryPersonWithPracticeAndLineManagerNamesAndRoles()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var createResponse = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, null));
+        var created = await createResponse.Content.ReadFromJsonAsync<PersonResponse>();
+
+        var response = await client.GetAsync("/people");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var people = await response.Content.ReadFromJsonAsync<List<PersonListEntry>>();
+        var admin = people!.Single(p => p.Id == _adminPersonId);
+        Assert.Contains(RoleNames.Admin, admin.Roles);
+        Assert.Equal("Software Engineering", admin.PracticeName);
+
+        var newHire = people!.Single(p => p.Id == created!.Id);
+        Assert.Equal(_adminPersonId, newHire.LineManagerId);
+        Assert.Equal("Alex Admin", newHire.LineManagerName);
+        Assert.Empty(newHire.Roles);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotListPeople()
+    {
+        using var client = CreateClient(_nonAdminPersonId);
+
+        var response = await client.GetAsync("/people");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task NonAdmin_CannotCreatePerson()
     {
         using var client = CreateClient(_nonAdminPersonId);

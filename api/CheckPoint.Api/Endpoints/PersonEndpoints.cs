@@ -11,6 +11,8 @@ public static class PersonEndpoints
     {
         var group = app.MapGroup("/people").RequireAuthorization(policy => policy.RequireRole(RoleNames.Admin));
 
+        group.MapGet("/", async (PersonService service) => Results.Ok(await service.GetAllAsync()));
+
         group.MapPost("/", async (CreatePersonRequest request, PersonService service) =>
         {
             var result = await service.CreateAsync(request);
