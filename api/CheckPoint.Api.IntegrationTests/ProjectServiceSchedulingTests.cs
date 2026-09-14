@@ -135,7 +135,11 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
             await context.SaveChangesAsync();
             secondPersonId = secondPerson.Id;
 
-            context.AppSettings.Add(new AppSettings { NewStarterIntervalWeeks = [3, 6, 10] });
+            // AddPersonAsync's own settings lookup already lazily created the
+            // singleton row above — update it in place rather than adding a
+            // second one, which would break that lookup's SingleOrDefault.
+            var settings = await context.AppSettings.SingleAsync();
+            settings.NewStarterIntervalWeeks = [3, 6, 10];
             await context.SaveChangesAsync();
 
             await service.AddPersonAsync(_projectId, secondPersonId);
