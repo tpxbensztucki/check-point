@@ -400,6 +400,43 @@ public class PocEndpointsTests : IAsyncLifetime
         Assert.Empty(otherProjectPocs!.Pocs);
     }
 
+    // CBLT-250: guest contact details are captured fresh per project, never
+    // reused from a standing directory — assigning the same person's exact
+    // name/email as a POC on two different projects must create two fully
+    // independent Poc rows, not two views onto one shared entity.
+    [Fact]
+    public async Task TheSamePersonAssignedAsPocOnTwoProjects_AreIndependentRecords()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var otherProject = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Second Project")))
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
+        await client.PostAsJsonAsync(
+            $"/projects/{otherProject!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
+        var otherPocsPath = $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs";
+
+        var firstResponse = await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+        var firstPoc = (await firstResponse.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value))!.Pocs[^1];
+
+        var secondResponse = await client.PostAsJsonAsync(
+            otherPocsPath, new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+        var secondPoc = (await secondResponse.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value))!.Pocs[^1];
+
+        Assert.NotEqual(firstPoc.Id, secondPoc.Id);
+
+        // Editing the first project's POC must never affect the second's,
+        // which it would if both rows were really one shared, reused entity.
+        await client.PutAsJsonAsync(
+            $"{PocsPath()}/{firstPoc.Id}",
+            new CreatePocRequest("Jamie Renamed", "jamie.new@example.com", PocRelationship.Internal, PocRole.Dm));
+
+        var secondProjectPocsAfter = await client.GetFromJsonAsync<ProjectMembershipPocsResponse>(
+            otherPocsPath, JsonTestOptions.Value);
+        var stillIndependent = secondProjectPocsAfter!.Pocs.Single(p => p.Id == secondPoc.Id);
+        Assert.Equal("Jamie Tech", stillIndependent.Name);
+        Assert.Equal("jamie@example.com", stillIndependent.Email);
+    }
+
     [Fact]
     public async Task UnauthenticatedCaller_CannotAssignAPoc()
     {
