@@ -1,5 +1,33 @@
 import { getApiBaseUrl } from './config'
+import { getCurrentPerson, type CurrentPerson } from './auth/currentPerson'
 import type { FeedbackFormValues } from './components/FeedbackForm'
+
+// Attaches the dev-only DevPersonId header (see DevPersonAuthenticationHandler
+// on the backend) for every authenticated dashboard call. The guest-facing
+// functions below (fetchMagicLink, submitFeedback) deliberately keep calling
+// plain fetch — a guest never signs in.
+export function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const person = getCurrentPerson()
+  const headers = new Headers(init.headers)
+  if (person) {
+    headers.set('DevPersonId', person.id)
+  }
+
+  return fetch(`${getApiBaseUrl()}${path}`, { ...init, headers })
+}
+
+// GET /dev/people is deliberately unauthenticated (see DevEndpoints.cs) — it
+// exists so the sign-in picker has something to search before the viewer has
+// any identity yet.
+export async function fetchDevPeople(): Promise<CurrentPerson[]> {
+  const response = await fetch(`${getApiBaseUrl()}/dev/people`)
+  if (!response.ok) {
+    return []
+  }
+
+  const body = (await response.json()) as { id: string; fullName: string; roles: string[] }[]
+  return body.map((p) => ({ id: p.id, fullName: p.fullName, roles: p.roles }))
+}
 
 export type MagicLinkStatus = 'valid' | 'expired' | 'alreadyUsed' | 'notFound' | 'error'
 
