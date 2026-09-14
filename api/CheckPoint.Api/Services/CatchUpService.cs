@@ -64,4 +64,39 @@ public class CatchUpService(CheckPointDbContext db, TimeProvider timeProvider)
 
         return RecordOutcomeResult.Recorded(CatchUpResponse.From(catchUp));
     }
+
+    // A Person's full flag/ad-hoc-review/catch-up-outcome history in one place
+    // (spec Section 5.3, CBLT-242) — same three-way scoping as
+    // PocResponseHistoryService.GetPocHistoryAsync. An empty list (no history
+    // at all) is a normal, valid Success response, not an error or a distinct
+    // status — the caller distinguishes "no history" from "forbidden" by the
+    // Status itself, not by an empty Entries list meaning something different.
+    public async Task<PersonCatchUpHistoryResult> GetHistoryAsync(
+        Guid personId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId, cancellationToken);
+        if (person is null)
+        {
+            return PersonCatchUpHistoryResult.PersonNotFound($"No Person found with id {personId}.");
+        }
+
+        if (!await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+                db, person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        {
+            return PersonCatchUpHistoryResult.Forbidden;
+        }
+
+        var catchUps = await db.CatchUps
+            .Where(c => c.PersonId == personId)
+            .OrderByDescending(c => c.CreatedAt)
+            .ToListAsync(cancellationToken);
+        var entries = catchUps.Select(CatchUpResponse.From).ToList();
+
+        return PersonCatchUpHistoryResult.Success(new PersonCatchUpHistoryResponse(personId, person.UnderReviewSince, entries));
+    }
 }

@@ -585,6 +585,19 @@ third BDD scenario. `Contracts/CatchUpContracts.cs`'s `CatchUpResponse` grew a
 `From(CatchUp)` static factory once two services needed to build the same
 response shape.
 
+CBLT-242 (`CatchUpService.GetHistoryAsync`, `GET /people/{personId}/catch-ups`)
+closes out Milestone 8 — a Person's full flag/ad-hoc-review/catch-up-outcome
+history in one place, ordered most-recent-first, same three-way scoping and
+"empty list is a normal Success, not an error" precedent as
+`PocResponseHistoryService.GetPocHistoryAsync` (Milestone 7). Returns
+`PersonCatchUpHistoryResponse` — `UnderReviewSince` surfaced at the top level
+(not just inferred from the entries) so a currently-active review is
+trivially distinguishable from resolved history, per the ticket's own AC.
+`CatchUpResponse` gained a computed `TriggerSource` (`CheckIn`/`AdHoc`, derived
+from whether `FeedbackRequestId` is set) so consumers don't have to re-derive
+it themselves — the ticket's own AC calls out "trigger source" as a field the
+history view must show.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
