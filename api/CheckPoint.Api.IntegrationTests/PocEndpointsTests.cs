@@ -269,6 +269,52 @@ public class PocEndpointsTests : IAsyncLifetime
         Assert.Empty(result!.MissingStandardRoles);
     }
 
+    // CBLT-255: the completeness indicator uses the Admin-configured target
+    // count per role, not a fixed "at least one" assumption.
+    [Fact]
+    public async Task RaisingTheTechTarget_FlagsAProjectWithOnlyOneTechPocAsIncomplete()
+    {
+        using var client = CreateClient(_adminPersonId);
+        await client.PutAsJsonAsync(
+            "/admin/settings",
+            new UpdateAdminSettingsRequest(
+                NewStarterIntervalWeeks: [2, 4, 8],
+                GeneralCycleSkipThresholdWeeks: 4,
+                AutomaticRequestSendingEnabled: true,
+                TargetTechPocCount: 2,
+                TargetDmPocCount: 1,
+                TargetOtherPocCount: 1));
+
+        var response = await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
+        Assert.Single(result!.Pocs);
+        Assert.Contains(PocRole.Tech, result.MissingStandardRoles);
+    }
+
+    [Fact]
+    public async Task AssigningMoreThanTheConfiguredTarget_IsStillAllowedAndNotFlaggedMissing()
+    {
+        using var client = CreateClient(_adminPersonId);
+        await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
+        await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Dana Dm", "dana@example.com", PocRelationship.Internal, PocRole.Dm));
+        await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Sam Other", "sam@example.com", PocRelationship.External, PocRole.Other));
+
+        // A second Tech POC, on top of the default target of 1 — the target
+        // is not a hard cap.
+        var response = await client.PostAsJsonAsync(
+            PocsPath(), new CreatePocRequest("Alex SecondTech", "alex@example.com", PocRelationship.Internal, PocRole.Tech));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
+        Assert.Equal(4, result!.Pocs.Count);
+        Assert.Empty(result.MissingStandardRoles);
+    }
+
     [Fact]
     public async Task AnInvalidEmail_IsRejected()
     {

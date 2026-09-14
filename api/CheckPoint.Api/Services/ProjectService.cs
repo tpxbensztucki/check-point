@@ -100,13 +100,14 @@ public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider, A
             .Select(g => new { MembershipId = g.Key, Roles = g.Select(p => p.Role).ToList() })
             .ToDictionaryAsync(g => g.MembershipId, g => g.Roles, cancellationToken);
 
+        var targets = AdminSettingsService.ToPocRoleTargets(await adminSettingsService.GetAsync(cancellationToken));
         var summaries = memberships
             .Select(m => new PersonProjectSummary(
                 m.ProjectId,
                 m.Name,
                 m.Status,
                 m.Status == ProjectStatus.Active
-                    ? PocRoleHelpers.ComputeMissingRoles(rolesByMembership.GetValueOrDefault(m.Id, []))
+                    ? PocRoleHelpers.ComputeMissingRoles(rolesByMembership.GetValueOrDefault(m.Id, []), targets)
                     : null))
             .OrderBy(s => s.ProjectName)
             .ToList();

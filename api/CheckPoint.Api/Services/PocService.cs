@@ -9,7 +9,7 @@ namespace CheckPoint.Api.Services;
 // Section 3). Callable by Admin, the Practice Lead of the target Person's
 // Practice, or the Line Manager of the target Person — not a plain role check, so
 // the caller's identity/roles are passed in rather than resolved here.
-public partial class PocService(CheckPointDbContext db)
+public partial class PocService(CheckPointDbContext db, AdminSettingsService adminSettingsService)
 {
     public async Task<PocAssignmentResult> AssignPocAsync(
         Guid projectId,
@@ -195,7 +195,9 @@ public partial class PocService(CheckPointDbContext db)
             .Select(p => new PocResponse(p.Id, p.Name, p.Email, p.Relationship, p.Role))
             .ToListAsync(cancellationToken);
 
-        var missingRoles = PocRoleHelpers.ComputeMissingRoles(pocs.Select(p => p.Role));
+        var settings = await adminSettingsService.GetAsync(cancellationToken);
+        var missingRoles = PocRoleHelpers.ComputeMissingRoles(
+            pocs.Select(p => p.Role), AdminSettingsService.ToPocRoleTargets(settings));
 
         return new ProjectMembershipPocsResponse(membershipId, pocs, missingRoles);
     }
