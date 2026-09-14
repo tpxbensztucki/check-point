@@ -309,7 +309,7 @@ public class PocEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync(
             PocsPath(), new CreatePocRequest("Alex SecondTech", "alex@example.com", PocRelationship.Internal, PocRole.Tech));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         Assert.Equal(4, result!.Pocs.Count);
         Assert.Empty(result.MissingStandardRoles);
