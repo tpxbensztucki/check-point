@@ -44,6 +44,7 @@ builder.Services.AddScoped<PocResponseHistoryService>();
 builder.Services.AddScoped<CatchUpService>();
 builder.Services.AddScoped<DevPersonDirectoryService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AdminSettingsService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
@@ -160,6 +161,7 @@ app.MapMagicLinkEndpoints();
 app.MapFeedbackRequestEndpoints();
 app.MapCatchUpEndpoints();
 app.MapDashboardEndpoints();
+app.MapAdminSettingsEndpoints();
 
 // Dev-only, unauthenticated — see DevEndpoints.cs. Same environment gate as
 // DevPersonAuthenticationHandler's own registration above.

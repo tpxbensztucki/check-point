@@ -64,6 +64,9 @@ function DashboardLayout() {
             <NavLink to="/dashboard/admin/projects" className={navLinkClass}>
               Admin: Projects
             </NavLink>
+            <NavLink to="/dashboard/admin/settings" className={navLinkClass}>
+              Admin: Settings
+            </NavLink>
           </>
         )}
       </nav>
