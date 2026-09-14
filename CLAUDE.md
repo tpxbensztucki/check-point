@@ -450,6 +450,25 @@ the Admin/Practice Lead Dashboard) don't exist yet (Milestone 9) — this ships 
 backend capability (the endpoint) only; wiring a reminder button into either view
 is for whoever builds those screens.
 
+CBLT-237 (`RequestDispatchService.GetPocStatusesAsync`, `GET
+/feedback-requests/{id}/pocs`) reports each currently-assigned POC's outcome for a
+request — `NotYetSent` / `Sent` / `Submitted` / `NoResponse` / `Cancelled` — never
+a single status on the request as a whole, since different POCs on the same
+request can be in different states (its own AC gives the example: one Submitted,
+two No Response). Deliberately **computed live** on every call rather than a
+stored flag flipped by a background job: given the current time, whether a
+`FeedbackSubmission` exists for that `(FeedbackRequestId, PocId)` pair, and the
+most recent non-invalidated `MagicLink` for that pair, the correct status follows
+directly with no risk of drifting out of sync with "now" the way a periodically-
+run job could (and no new job/infra needed). A POC added to the project after the
+request was already dispatched (no link was ever issued to them) reads as
+`NotYetSent`, same as before dispatch.
+
+`Contracts/FeedbackRequestContracts.cs` holds the new `PocResponseStatus` enum and
+`PocResponseStatusEntry` response record — the first contracts file for
+`FeedbackRequest`-shaped responses (previously `FeedbackRequest` had no view
+endpoint of its own, only the dispatch/reminder actions).
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
 using CheckPoint.Api.Auth;
+using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -212,6 +214,39 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
         await admin.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
 
         var response = await admin.PostAsync($"/feedback-requests/{_requestId}/pocs/{Guid.NewGuid()}/remind", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_CanViewPerPocStatuses()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        await admin.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
+
+        var response = await admin.GetAsync($"/feedback-requests/{_requestId}/pocs");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<List<PocResponseStatusEntry>>();
+        Assert.Equal(PocResponseStatus.Sent, body!.Single().Status);
+    }
+
+    [Fact]
+    public async Task ALineManagerWithNoRelationToThePerson_CannotViewPerPocStatuses()
+    {
+        using var client = CreateClient(_otherLineManagerPersonId);
+
+        var response = await client.GetAsync($"/feedback-requests/{_requestId}/pocs");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ViewingStatusesForAnUnknownRequest_ReturnsNotFound()
+    {
+        using var admin = CreateClient(_adminPersonId);
+
+        var response = await admin.GetAsync($"/feedback-requests/{Guid.NewGuid()}/pocs");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

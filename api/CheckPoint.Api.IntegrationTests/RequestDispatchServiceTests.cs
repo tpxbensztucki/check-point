@@ -1,3 +1,4 @@
+using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -439,5 +440,158 @@ public class RequestDispatchServiceTests : IAsyncLifetime
             requestId, Guid.NewGuid(), Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
         Assert.Equal(ReminderStatus.PocNotFound, result.Status);
+    }
+
+    [Fact]
+    public async Task BeforeDispatch_EveryPocIsNotYetSent()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var result = await CreateService(context, emailSender).GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(PocStatusViewStatus.Success, result.Status);
+        Assert.Equal(PocResponseStatus.NotYetSent, result.Entries!.Single().Status);
+    }
+
+    [Fact]
+    public async Task AfterDispatchButBeforeExpiry_ThePocIsSent()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var result = await service.GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(PocResponseStatus.Sent, result.Entries!.Single().Status);
+    }
+
+    [Fact]
+    public async Task AfterSevenDaysWithNoSubmission_ThePocIsNoResponse()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+
+        var result = await service.GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(PocResponseStatus.NoResponse, result.Entries!.Single().Status);
+    }
+
+    [Fact]
+    public async Task APocWhoSubmitted_IsSubmittedEvenAfterExpiry()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var dispatchService = CreateService(context, emailSender);
+        await dispatchService.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var token = ExtractToken(emailSender.Sent.Single());
+
+        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        await submissionService.SubmitAsync(token, new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
+            "Great work.", "Nothing much.", "Keep it up."));
+
+        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+
+        var result = await dispatchService.GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(PocResponseStatus.Submitted, result.Entries!.Single(e => e.PocId == pocId).Status);
+    }
+
+    [Fact]
+    public async Task ARequestWithThreePocs_ShowsAMixOfOutcomesNotASingleStatus()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var submittedPocId = await AddPocAsync(personId, "Alex Submitted", "alex@example.com", PocRelationship.Internal);
+        var noResponsePocId = await AddPocAsync(personId, "Blair NoResponse", "blair@example.com", PocRelationship.Internal);
+        var pendingPocId = await AddPocAsync(personId, "Casey Pending", "casey@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var dispatchService = CreateService(context, emailSender);
+        await dispatchService.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var submittedEmail = emailSender.Sent.Single(e => e.To == "alex@example.com");
+        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        await submissionService.SubmitAsync(ExtractToken(submittedEmail), new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
+            "Great work.", "Nothing much.", "Keep it up."));
+
+        // Advance past expiry for everyone; the submitted POC should stay
+        // Submitted regardless, and the pending one gets a reminder (fresh
+        // link, fresh expiry) so it stays Sent instead of falling to NoResponse.
+        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        await dispatchService.SendReminderAsync(
+            requestId, pendingPocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var result = await dispatchService.GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var byId = result.Entries!.ToDictionary(e => e.PocId);
+        Assert.Equal(PocResponseStatus.Submitted, byId[submittedPocId].Status);
+        Assert.Equal(PocResponseStatus.NoResponse, byId[noResponsePocId].Status);
+        Assert.Equal(PocResponseStatus.Sent, byId[pendingPocId].Status);
+    }
+
+    [Fact]
+    public async Task ACancelledRequest_ShowsCancelledForEveryPoc()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        await using (var context = CreateContext())
+        {
+            var projectService = new ProjectService(context, _time, Options.Create(new NewStarterCycleOptions()));
+            await projectService.RemovePersonAsync(_projectId, personId);
+        }
+
+        _time.Advance(TimeSpan.FromDays(14));
+        var emailSender = new RecordingEmailSender();
+        await using (var context = CreateContext())
+        {
+            await CreateService(context, emailSender).DispatchDueAutomaticRequestsAsync();
+        }
+
+        await using var verify = CreateContext();
+        var result = await CreateService(verify, emailSender).GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(PocResponseStatus.Cancelled, result.Entries!.Single().Status);
+    }
+
+    [Fact]
+    public async Task ALineManagerWithNoRelationToThePerson_CannotViewPocStatuses()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var result = await CreateService(context, emailSender).GetPocStatusesAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: false, callerIsPracticeLead: false, callerIsLineManager: true);
+
+        Assert.Equal(PocStatusViewStatus.Forbidden, result.Status);
     }
 }
