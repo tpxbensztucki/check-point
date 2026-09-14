@@ -690,6 +690,24 @@ one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 already holds (e.g. to change which Practice they lead) is rejected — that's left
 for a future story, since neither the spec nor the current backlog covers it.
 
+### Dev seed data (local Development only)
+
+`DevDataSeeder.SeedAsync` (called from `Program.cs`, gated to
+`app.Environment.IsDevelopment()` specifically — not the broader
+"not Production" gate the dev auth scheme/`GET /dev/people` use, since
+integration tests run in a "Testing" environment against a fresh database
+per test class and would have this seed data corrupt their fixtures)
+inserts one Person per role plus one plain report, only when the `People`
+table is completely empty: **Ada Admin** (Admin), **Lee Lead** (Practice
+Lead, set as the seeded Practice's lead), **Morgan Manager** (Line Manager),
+and **Riley Report** (no roles, reports to Morgan). All four in one seeded
+Department/Practice. This exists purely so the dev sign-in picker
+(`GET /dev/people`, CBLT-304) has real people to switch between locally
+without first needing an existing Admin to create any — the same
+bootstrapping gap that motivated `GET /dev/people` itself. Runs once per
+fresh database (idempotent via the empty-table check) — safe to restart the
+API repeatedly without duplicating rows.
+
 ### Auth (interim, until CBLT-211)
 
 There is no real sign-in yet. `api/CheckPoint.Api/Auth/DevPersonAuthenticationHandler.cs`
