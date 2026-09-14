@@ -22,10 +22,25 @@ builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<PocService>();
 builder.Services.AddScoped<FeedbackCycleService>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
+builder.Services.AddScoped<RequestDispatchService>();
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
 builder.Services.Configure<GeneralCycleOptions>(
     builder.Configuration.GetSection(GeneralCycleOptions.SectionName));
+builder.Services.Configure<RequestDispatchOptions>(
+    builder.Configuration.GetSection(RequestDispatchOptions.SectionName));
+builder.Services.Configure<FrontendOptions>(
+    builder.Configuration.GetSection(FrontendOptions.SectionName));
+builder.Services.Configure<SmtpOptions>(
+    builder.Configuration.GetSection(SmtpOptions.SectionName));
+
+// Not registered in "Testing" (integration tests) — see the background service's
+// own doc comment for why.
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddHostedService<RequestDispatchBackgroundService>();
+}
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD
 // SSO) exists — see its own doc comment. It must never run in Production, so the
@@ -92,6 +107,7 @@ app.MapOrgTreeEndpoints();
 app.MapProjectEndpoints();
 app.MapPocEndpoints();
 app.MapMagicLinkEndpoints();
+app.MapFeedbackRequestEndpoints();
 
 var summaries = new[]
 {
