@@ -17,6 +17,7 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<CatchUp> CatchUps => Set<CatchUp>();
     public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
     public DbSet<LmNotification> LmNotifications => Set<LmNotification>();
+    public DbSet<AppSettings> AppSettings => Set<AppSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

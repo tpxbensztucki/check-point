@@ -12,6 +12,7 @@ import PeoplePage from './pages/admin/PeoplePage'
 import PersonDetailPage from './pages/admin/PersonDetailPage'
 import ProjectDetailPage from './pages/admin/ProjectDetailPage'
 import ProjectsPage from './pages/admin/ProjectsPage'
+import SettingsPage from './pages/admin/SettingsPage'
 import SignInPage from './pages/SignInPage'
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
             <Route path="admin/people/:personId" element={<PersonDetailPage />} />
             <Route path="admin/projects" element={<ProjectsPage />} />
             <Route path="admin/projects/:projectId" element={<ProjectDetailPage />} />
+            <Route path="admin/settings" element={<SettingsPage />} />
           </Route>
         </Route>
       </Routes>

@@ -741,6 +741,28 @@ already computes `MissingStandardRoles` for the completeness indicator).
 All write actions (create/complete a Project, add/remove a member, POC
 CRUD) already existed and are unchanged.
 
+## Milestone 12 (Admin Settings)
+
+CBLT-251 (`AppSettings` domain entity, `AdminSettingsService`, `GET`/`PUT
+/admin/settings`, `SettingsPage` at `/dashboard/admin/settings`) is the
+scaffold for this milestone — a single, lazily-created singleton row (one
+`AppSettings` per database, created with defaults the first time
+`AdminSettingsService.GetAsync`/`UpdateAsync` runs against an empty table,
+rather than a migration-time seed) covering every value that today lives in
+a hardcoded default or an interim `IOptions<T>` placeholder
+(`NewStarterCycleOptions`, `GeneralCycleOptions`, `RequestDispatchOptions` —
+each already carried a comment naming the CBLT-25x ticket that would replace
+it with this). Deliberately scoped narrowly: this ticket only adds the table
+and the Admin-only read/write surface, with baseline validation (no empty/
+negative values); it does **not** yet change what any consuming service
+reads from — `ProjectService.AddPersonAsync`, the FY-quarter scheduler, and
+`RequestDispatchService` all keep reading their old `IOptions<T>` until
+CBLT-252/253/254/255 individually switch each one over to this row, one
+setting at a time. `SettingsPage` groups the fields into three sections
+(Cycle Scheduling, Notifications, POC Requirements) purely for display — the
+API has only the one flat row to read/write, matching every other
+full-field-set `PUT` convention in this codebase (e.g. `PUT /people/{id}`).
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

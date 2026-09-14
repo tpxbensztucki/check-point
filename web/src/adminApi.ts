@@ -253,6 +253,36 @@ export async function updatePoc(
   return response.ok
 }
 
+// Mirrors CheckPoint.Api/Contracts/AdminSettingsContracts.cs. Backs the
+// Admin Settings screen (CBLT-251) — one flat singleton settings row; the
+// frontend groups fields into sections for display.
+export interface AdminSettings {
+  newStarterIntervalWeeks: number[]
+  generalCycleSkipThresholdWeeks: number
+  automaticRequestSendingEnabled: boolean
+  targetTechPocCount: number
+  targetDmPocCount: number
+  targetOtherPocCount: number
+}
+
+export async function fetchAdminSettings(): Promise<AdminSettings | null> {
+  const response = await authorizedFetch('/admin/settings')
+  if (!response.ok) {
+    return null
+  }
+
+  return (await response.json()) as AdminSettings
+}
+
+export async function updateAdminSettings(settings: AdminSettings): Promise<boolean> {
+  const response = await authorizedFetch('/admin/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  return response.ok
+}
+
 export async function removePoc(projectId: string, personId: string, pocId: string): Promise<boolean> {
   const response = await authorizedFetch(
     `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}/pocs/${encodeURIComponent(pocId)}`,
