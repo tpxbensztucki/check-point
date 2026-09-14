@@ -21,6 +21,7 @@ builder.Services.AddScoped<OrgTreeService>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<PocService>();
 builder.Services.AddScoped<FeedbackCycleService>();
+builder.Services.AddScoped<FeedbackSubmissionService>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
 builder.Services.Configure<GeneralCycleOptions>(

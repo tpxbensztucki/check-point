@@ -344,12 +344,38 @@ Submit button is never `disabled`; invalid submission attempts show inline
 `role="alert"` errors and `aria-invalid`/`aria-describedby` on the offending
 field(s) instead, since a silently-disabled button is a common accessibility
 pitfall (spec Section 14) — screen-reader/keyboard users get no explanation for
-why nothing happens. `FeedbackForm` only validates and calls its `onSubmit` prop;
-`GuestFeedbackPage` wires a temporary local-only handler (just flips to a "thank
-you" state) since actually sending the result to the backend is a separate story
-(Submission handling and confirmation, CBLT-233). Added
-`@testing-library/user-event` as a new dev dependency for its tests (real
-typing/click/blur simulation, not just `fireEvent`).
+why nothing happens. `FeedbackForm` only validates and calls its `onSubmit` prop; `GuestFeedbackPage`
+wires the real submission call (see below). Added `@testing-library/user-event`
+as a new dev dependency for its tests (real typing/click/blur simulation, not
+just `fireEvent`).
+
+`POST /magic-links/{token}/submission` (CBLT-233, `FeedbackSubmissionService`)
+handles a completed submission. Content validation (required + 2000-char limit,
+mirroring `FeedbackForm`'s own rules since the API is public and can't trust
+client-side validation alone) happens *before* the magic link is touched, so a
+rejected submission never burns the guest's one chance to submit — only once
+validation passes does the service call `MagicLinkService.LoadAndCheckAsync`
+(now `internal`, not `private`, precisely so this service can validate a token
+and then mutate the same tracked `MagicLink` itself as part of one
+`SaveChangesAsync`, rather than calling `ConsumeAsync` separately and
+potentially consuming the link before knowing the submission will succeed). One
+`SaveChangesAsync` call marks the `MagicLink` used, sets the `FeedbackRequest`'s
+`Status` to `Sent`, inserts the immutable `FeedbackSubmission` row, and — if the
+Person has a `LineManagerId` set — inserts an `LmNotification` outbox row. There
+is deliberately no endpoint that edits a `FeedbackSubmission`: immutability
+(spec Section 8/10) is enforced by omission, not a guarded field. `LmNotification`
+is a durable outbox, not an actual send: real delivery is the Notifications
+epic's dispatch job (not yet built), but because the row is written in the same
+transaction as the submission it satisfies the ticket's "must not be silently
+dropped, even if the mechanism temporarily fails" requirement by construction —
+there's nothing to lose since nothing is attempted synchronously yet. No line
+manager assigned is treated as "nobody to notify" rather than a dropped
+notification. The frontend's `submitFeedback` (`web/src/api.ts`) posts the
+guest's `FeedbackFormValues` as JSON to this endpoint; `GuestFeedbackPage` shows
+the "Thank you" confirmation on success, or an inline `role="alert"` message
+(keeping the form on screen) for an expired/already-used link or any other
+failure, guarding against a double-submit firing a second request while the
+first is still in flight.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

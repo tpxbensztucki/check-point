@@ -64,7 +64,11 @@ public class MagicLinkService(CheckPointDbContext db, TimeProvider timeProvider)
         return MagicLinkValidationResult.Valid(link.FeedbackRequestId);
     }
 
-    private async Task<(MagicLink? Link, MagicLinkValidationStatus Status)> LoadAndCheckAsync(
+    // Internal (not private) so FeedbackSubmissionService can validate a token and
+    // then mutate the same tracked MagicLink entity as part of its own single
+    // SaveChangesAsync call, instead of calling ConsumeAsync separately and
+    // burning the link before the submitted content has even been validated.
+    internal async Task<(MagicLink? Link, MagicLinkValidationStatus Status)> LoadAndCheckAsync(
         string token, CancellationToken cancellationToken)
     {
         var link = await db.MagicLinks.SingleOrDefaultAsync(l => l.Token == token, cancellationToken);

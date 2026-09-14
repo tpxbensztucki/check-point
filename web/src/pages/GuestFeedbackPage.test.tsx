@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import GuestFeedbackPage from './GuestFeedbackPage'
@@ -22,6 +23,29 @@ function mockFetchOnce(status: number, body?: unknown) {
       json: () => Promise.resolve(body),
     }) as unknown as typeof fetch,
   )
+}
+
+// Distinguishes the initial GET (link view) from the POST (submission), since a
+// full submission flow needs both to be mocked with independent responses.
+function mockFetchForSubmissionFlow(postStatus: number) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((_url: string, init?: RequestInit) => {
+      const isSubmission = init?.method === 'POST'
+      const status = isSubmission ? postStatus : 200
+      return Promise.resolve({
+        ok: status >= 200 && status < 300,
+        status,
+        json: () => Promise.resolve({ feedbackRequestId: 'abc-123' }),
+      })
+    }) as unknown as typeof fetch,
+  )
+}
+
+async function fillOutForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText(/^what they are doing well/i), 'Great communication.')
+  await user.type(screen.getByLabelText(/aren't doing well/i), 'Sometimes misses deadlines.')
+  await user.type(screen.getByLabelText(/what they need to improve/i), 'Follow up on action items sooner.')
 }
 
 describe('GuestFeedbackPage', () => {
@@ -70,5 +94,34 @@ describe('GuestFeedbackPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/isn't valid/i)).toBeInTheDocument()
     })
+  })
+
+  it('submits the completed form and shows a confirmation', async () => {
+    mockFetchForSubmissionFlow(200)
+    const user = userEvent.setup()
+
+    renderAtToken('a-valid-token')
+    await waitFor(() => screen.getByText(/share your feedback/i))
+    await fillOutForm(user)
+    await user.click(screen.getByRole('button', { name: /submit feedback/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/thank you/i)).toBeInTheDocument()
+    })
+  })
+
+  it('shows an error and keeps the form when the link was already used by the time of submission', async () => {
+    mockFetchForSubmissionFlow(409)
+    const user = userEvent.setup()
+
+    renderAtToken('a-valid-token')
+    await waitFor(() => screen.getByText(/share your feedback/i))
+    await fillOutForm(user)
+    await user.click(screen.getByRole('button', { name: /submit feedback/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/already been submitted/i)
+    })
+    expect(screen.getByText(/share your feedback/i)).toBeInTheDocument()
   })
 })

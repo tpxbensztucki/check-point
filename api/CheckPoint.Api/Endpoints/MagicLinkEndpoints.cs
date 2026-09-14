@@ -26,5 +26,22 @@ public static class MagicLinkEndpoints
                 _ => Results.Problem(),
             };
         });
+
+        group.MapPost("/{token}/submission", async (
+            string token, SubmitFeedbackRequest request, FeedbackSubmissionService service) =>
+        {
+            var result = await service.SubmitAsync(token, request);
+            return result.Status switch
+            {
+                FeedbackSubmissionStatus.Submitted => Results.Ok(),
+                FeedbackSubmissionStatus.Invalid => Results.ValidationProblem(
+                    result.Errors!.ToDictionary(e => e.Key, e => new[] { e.Value })),
+                FeedbackSubmissionStatus.LinkNotFound => Results.NotFound("This link is not valid."),
+                FeedbackSubmissionStatus.LinkExpired => Results.Problem(
+                    title: "This link has expired.", statusCode: StatusCodes.Status410Gone),
+                FeedbackSubmissionStatus.LinkAlreadyUsed => Results.Conflict("This feedback has already been submitted."),
+                _ => Results.Problem(),
+            };
+        });
     }
 }
