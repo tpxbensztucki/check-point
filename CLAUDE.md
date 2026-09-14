@@ -914,6 +914,41 @@ satisfies both "no correlation clue back to a respondent" and
 content-derived sort key can never depend on input order or wall-clock
 time. Not yet wired to any endpoint — CBLT-247 will be its first caller.
 
+CBLT-248 (`Person.LeaverSince`, `LeaverRetentionService`,
+`LeaverRetentionBackgroundService`) closes out Milestone 11 with the
+highest-blast-radius ticket in the project so far — permanent, irreversible
+deletion — and was shipped last within this milestone for exactly that
+reason, once every other Person/Poc/FeedbackSubmission-touching piece
+(CBLT-249/250) was already stable. `Person.LeaverSince` (new nullable
+`DateTimeOffset`, migration `AddPersonLeaverSince`) is set once, the moment
+`PersonService.MarkAsLeaverForViewerAsync` flips `Status` to `Leaver` —
+never cleared, matching that transition's existing one-way design — and is
+the strict anchor for the 6-month clock; nothing before this ticket recorded
+when a Leaver actually became one. `LeaverRetentionService.
+PurgeExpiredLeaversAsync` finds every Leaver whose `LeaverSince` is 6 months
+or older and, per Person, hard-deletes exactly three kinds of row scoped to
+their `ProjectMembership`s: `MagicLink`s (deleted first — `PocId` is a
+Restrict FK to `Poc`, so these must go before the `Poc` rows they
+reference), `FeedbackSubmission`s (the feedback content itself — deleting
+these cascades to any `LmNotification` outbox row via the already-configured
+cascade), and `Poc`s (the respondent identity snapshot). The Person row
+itself, their `ProjectMembership`s, and every `FeedbackRequest`'s own
+scheduling metadata are deliberately untouched — none of that is
+feedback-related personal data, satisfying the ticket's own "org history is
+unaffected" AC. `LeaverRetentionBackgroundService` follows the exact same
+`BackgroundService` + `IServiceScopeFactory` shape as
+`RequestDispatchBackgroundService`/`LmNotificationDispatchBackgroundService`
+(same not-registered-in-`"Testing"` gate), but polls daily rather than
+every minute, appropriate to a 6-month-resolution job. Tested directly
+against the service (no HTTP endpoint exists, since nothing triggers this
+job but the poll itself) with a `FakeTimeProvider`, the same style as
+`ProjectServiceSchedulingTests`/`GeneralCycleSchedulingTests`; verified
+manually via `docker compose` by backdating a seeded Leaver's
+`LeaverSince` directly in Postgres and restarting the API container (the
+background service always runs once immediately on startup, before its
+first `Task.Delay`), confirming the submission/POC/magic-link rows were
+gone while the Person and their `ProjectMembership` remained fully intact.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

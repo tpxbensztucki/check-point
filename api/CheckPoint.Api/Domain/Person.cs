@@ -17,6 +17,12 @@ public class Person
 
     public PersonStatus Status { get; set; } = PersonStatus.Employed;
 
+    // Set once, the moment Status transitions to Leaver (PersonService.
+    // MarkAsLeaverForViewerAsync) — never cleared, matching that transition's
+    // own one-way design. The anchor date for CBLT-248's 6-month post-leaver
+    // retention job; null for anyone still Employed.
+    public DateTimeOffset? LeaverSince { get; set; }
+
     // Orthogonal to Status (Employed/Leaver is an employment lifecycle state;
     // being under review is a separate, overlapping flag from a flagged check-in
     // — spec Section 5.3) — set/refreshed by
