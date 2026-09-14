@@ -690,6 +690,25 @@ one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 already holds (e.g. to change which Practice they lead) is rejected — that's left
 for a future story, since neither the spec nor the current backlog covers it.
 
+### CORS (bug fix, found while testing the dev seed data end-to-end in a browser)
+
+There was no CORS configuration anywhere in the API — the frontend and API have
+always been served from different origins (different ports locally via Docker
+Compose, separate hosts once deployed to Azure Container Apps), with the browser
+calling the API directly and no reverse proxy in between. This went unnoticed
+through the entire guest feedback flow (Milestone 6) and every dashboard PR
+(Milestone 9) because every frontend test stubs `fetch` directly rather than
+exercising a real browser's CORS enforcement — the first person to actually
+click through the dashboard in a browser hit `No 'Access-Control-Allow-Origin'
+header is present`. Fixed with `builder.Services.AddCors()`/`app.UseCors()` in
+`Program.cs`, allowing exactly `FrontendOptions.BaseUrl` (the same
+already-config-driven setting used to build magic-link URLs in emails — no new
+setting to keep in sync) with any header/method, which covers both the plain
+guest-flow requests and `authorizedFetch`'s custom `DevPersonId` header.
+Registered unconditionally (not gated to Development) since the deployed
+environment will need this too, once frontend and API are on separate Azure
+Container Apps hosts.
+
 ### Dev seed data (local Development only)
 
 `DevDataSeeder.SeedAsync` (called from `Program.cs`, gated to
