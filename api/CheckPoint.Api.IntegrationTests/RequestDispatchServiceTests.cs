@@ -45,14 +45,13 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         return new CheckPointDbContext(options);
     }
 
-    private RequestDispatchService CreateService(
-        CheckPointDbContext context, RecordingEmailSender emailSender, RequestDispatchMode mode = RequestDispatchMode.Automatic) =>
+    private RequestDispatchService CreateService(CheckPointDbContext context, RecordingEmailSender emailSender) =>
         new(
             context,
             _time,
             emailSender,
             new MagicLinkService(context, _time),
-            Options.Create(new RequestDispatchOptions { Mode = mode }),
+            new AdminSettingsService(context),
             Options.Create(new FrontendOptions()));
 
     // Schedules a New Starter cycle (via ProjectService, same as
@@ -154,13 +153,52 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
         {
-            await CreateService(context, emailSender, RequestDispatchMode.Manual).DispatchDueAutomaticRequestsAsync();
+            // ScheduleRequestAsync's own ProjectService call already lazily
+            // created the singleton settings row — update it in place rather
+            // than adding a second one.
+            var settings = await context.AppSettings.SingleAsync();
+            settings.AutomaticRequestSendingEnabled = false;
+            await context.SaveChangesAsync();
+
+            await CreateService(context, emailSender).DispatchDueAutomaticRequestsAsync();
         }
 
         Assert.Empty(emailSender.Sent);
         await using var verify = CreateContext();
         var request = await verify.FeedbackRequests.SingleAsync(r => r.Id == requestId);
         Assert.Equal(FeedbackRequestStatus.Scheduled, request.Status);
+    }
+
+    [Fact]
+    public async Task SwitchingToManualAfterwards_DoesNotRetroactivelyAffectAnAlreadySentRequest()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+        _time.Advance(TimeSpan.FromDays(14));
+
+        var emailSender = new RecordingEmailSender();
+        await using (var context = CreateContext())
+        {
+            await CreateService(context, emailSender).DispatchDueAutomaticRequestsAsync();
+        }
+
+        Assert.Single(emailSender.Sent);
+
+        // Switching to Manual after the send only governs future automatic
+        // passes — it never touches a request that's already Sent.
+        await using (var context = CreateContext())
+        {
+            var settings = await context.AppSettings.SingleAsync();
+            settings.AutomaticRequestSendingEnabled = false;
+            await context.SaveChangesAsync();
+
+            await CreateService(context, emailSender).DispatchDueAutomaticRequestsAsync();
+        }
+
+        Assert.Single(emailSender.Sent);
+        await using var verify = CreateContext();
+        var request = await verify.FeedbackRequests.SingleAsync(r => r.Id == requestId);
+        Assert.Equal(FeedbackRequestStatus.Sent, request.Status);
     }
 
     [Fact]

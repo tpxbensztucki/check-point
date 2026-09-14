@@ -54,7 +54,7 @@ public class DashboardServiceTests : IAsyncLifetime
             _time,
             emailSender,
             new MagicLinkService(context, _time),
-            Options.Create(new RequestDispatchOptions()),
+            new AdminSettingsService(context),
             Options.Create(new FrontendOptions()));
 
     private async Task<Guid> CreatePersonAsync(Guid practiceId)

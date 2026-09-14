@@ -803,6 +803,25 @@ proving a configured 6-week threshold changes the skip decision a 5-week-out
 enrolment makes, where the previous test already proves the 4-week default
 does not skip at the same distance.
 
+CBLT-254 is the third setting switched over: `RequestDispatchService`'s
+constructor now takes `AdminSettingsService` instead of
+`IOptions<RequestDispatchOptions>`, and
+`DispatchDueAutomaticRequestsAsync` reads `AutomaticRequestSendingEnabled`
+from it — the now-fully-unused `RequestDispatchOptions.cs` (both the
+options class and its `RequestDispatchMode` enum) is deleted along with its
+`Program.cs` registration. No behaviour changed for `DispatchManuallyAsync`,
+which already ignored the mode entirely (an authorised user can always
+force a send regardless). Every integration test constructing
+`RequestDispatchService` directly was mechanically swapped the same way as
+CBLT-252/253; the one test exercising Manual mode now flips the setting on
+its own context instead of passing a `RequestDispatchMode` constructor
+argument (which no longer exists). Added a new test proving the "no
+retroactive effect" AC directly: dispatch a request under Automatic, then
+switch to Manual and dispatch again — the already-`Sent` request's status
+is untouched, since the second pass finds nothing due (the mode only gates
+whether the pass runs `dueRequests` selection at all, not any already-Sent
+row).
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in
