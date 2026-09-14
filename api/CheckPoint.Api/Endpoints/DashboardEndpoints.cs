@@ -24,5 +24,17 @@ public static class DashboardEndpoints
 
             return Results.Ok(entries);
         });
+
+        group.MapGet("/flagged-people", async (ClaimsPrincipal caller, DashboardService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var entries = await service.GetFlaggedPeopleAsync(
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return Results.Ok(entries);
+        });
     }
 }

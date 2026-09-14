@@ -98,4 +98,48 @@ public class DashboardService(CheckPointDbContext db, TimeProvider timeProvider)
 
         return entries;
     }
+
+    // Everyone currently Under Review with a Pending CatchUp (CBLT-244) —
+    // keyed off CatchUp.Status == Pending, not Person.UnderReviewSince, so an
+    // EscalateFurther outcome (which leaves UnderReviewSince set but resolves
+    // that CatchUp) correctly drops the Person from this list until a fresh
+    // flag or ad-hoc trigger opens a new one. Same visible-person-ids scoping
+    // as GetOutstandingRequestsAsync.
+    public async Task<IReadOnlyList<FlaggedPersonEntry>> GetFlaggedPeopleAsync(
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var visiblePersonIds = await PersonAuthorizationHelpers.GetVisiblePersonIdsAsync(
+            db, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken);
+
+        if (visiblePersonIds is { Count: 0 })
+        {
+            return [];
+        }
+
+        var catchUpsQuery = db.CatchUps
+            .Include(c => c.Person)
+            .Where(c => c.Status == CatchUpStatus.Pending);
+
+        if (visiblePersonIds is not null)
+        {
+            catchUpsQuery = catchUpsQuery.Where(c => visiblePersonIds.Contains(c.PersonId));
+        }
+
+        var catchUps = await catchUpsQuery
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return catchUps
+            .Select(c => new FlaggedPersonEntry(
+                c.PersonId,
+                c.Person.FullName,
+                c.Id,
+                c.FeedbackRequestId is null ? CatchUpTriggerSource.AdHoc : CatchUpTriggerSource.CheckIn,
+                c.CreatedAt))
+            .ToList();
+    }
 }

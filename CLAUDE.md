@@ -658,6 +658,31 @@ precedent as `CatchUpResponse.TriggerSource`. The manual reminder action
 reuses the existing `POST /feedback-requests/{id}/pocs/{pocId}/remind`
 (CBLT-236) — first called from the frontend here.
 
+CBLT-244 (`FlaggedPeoplePage` at `/dashboard/flagged-people`, `GET
+/dashboard/flagged-people`, `DashboardService.GetFlaggedPeopleAsync`) closes
+out Milestone 9. Deliberately keyed off "has a `Pending` `CatchUp`", not
+`Person.UnderReviewSince != null` — the ticket's own title and first AC say
+"Under Review **with a pending catch-up**", and the two can diverge: after an
+`EscalateFurther` outcome (CBLT-241), `UnderReviewSince` is deliberately left
+set but that `CatchUp`'s own `Status` becomes `Recorded`, so the Person
+correctly stops appearing in this view until a fresh flag or ad-hoc trigger
+opens a new `CatchUp` — confirmed by its own test,
+`APersonEscalatedFurther_DoesNotAppearUntilAFreshCatchUpExists`. Uses the
+same `GetVisiblePersonIdsAsync` scoping as CBLT-243.
+
+This PR also builds `CatchUpOutcomePage` (`/dashboard/people/{personId}/catch-up`)
+— the "catch-up outcome recording view" CBLT-244's own third AC/BDD scenario
+says selecting a flagged Person must navigate to, which didn't exist yet:
+CBLT-241/242 shipped backend-only in Milestone 8 (`POST
+/catch-ups/{id}/outcome`, `GET /people/{id}/catch-ups`), explicitly deferred
+at the time since Milestone 9 didn't exist. This is that frontend, arriving
+because CBLT-244's own wording requires the navigation target to work, not
+scope creep. It shows the Person's full catch-up history, with a form (only
+for the currently `Pending` entry) mirroring the backend's own validation —
+`Other` requires notes, shown as an inline `role="alert"` message rather than
+a disabled submit button, the same accessibility precedent `FeedbackForm`
+established in Milestone 6.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

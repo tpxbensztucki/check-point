@@ -90,4 +90,35 @@ public class DashboardEndpointsTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Fact]
+    public async Task AnAuthenticatedAdmin_GetsAnOkResponseForFlaggedPeople()
+    {
+        await using var db = CreateDb();
+        var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        db.Practices.Add(practice);
+        await db.SaveChangesAsync();
+
+        var admin = new Person { FullName = "Alex Admin", PracticeId = practice.Id, Roles = [adminRole] };
+        db.People.Add(admin);
+        await db.SaveChangesAsync();
+
+        using var client = CreateClient(admin.Id);
+        var response = await client.GetAsync("/dashboard/flagged-people");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var entries = await response.Content.ReadFromJsonAsync<List<FlaggedPersonEntry>>();
+        Assert.Empty(entries!);
+    }
+
+    [Fact]
+    public async Task UnauthenticatedCaller_CannotViewFlaggedPeople()
+    {
+        using var client = CreateClient();
+
+        var response = await client.GetAsync("/dashboard/flagged-people");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }
