@@ -29,6 +29,11 @@ public class AdminSettingsService(CheckPointDbContext db)
                 "New Starter intervals must be a non-empty list of positive week counts.");
         }
 
+        if (!IsStrictlyIncreasing(request.NewStarterIntervalWeeks))
+        {
+            return AdminSettingsUpdateResult.Invalid("New Starter intervals must be in strictly increasing order.");
+        }
+
         if (request.GeneralCycleSkipThresholdWeeks <= 0)
         {
             return AdminSettingsUpdateResult.Invalid("The FY-quarter skip threshold must be a positive number of weeks.");
@@ -64,6 +69,21 @@ public class AdminSettingsService(CheckPointDbContext db)
         db.AppSettings.Add(row);
         await db.SaveChangesAsync(cancellationToken);
         return row;
+    }
+
+    // CBLT-252's own AC: each stage's check-in must be later than the last, or
+    // the schedule doesn't make sense (spec Section 5.1's fixed stage ordering).
+    private static bool IsStrictlyIncreasing(int[] weeks)
+    {
+        for (var i = 1; i < weeks.Length; i++)
+        {
+            if (weeks[i] <= weeks[i - 1])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static AdminSettingsResponse ToResponse(AppSettings row) => new(

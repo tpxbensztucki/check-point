@@ -134,6 +134,17 @@ public class AdminSettingsEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdatingWithNonIncreasingNewStarterIntervals_IsRejected()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PutAsJsonAsync(
+            "/admin/settings", ValidRequest() with { NewStarterIntervalWeeks = [8, 4, 2] });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdatingWithAZeroSkipThreshold_IsRejected()
     {
         using var client = CreateClient(_adminPersonId);

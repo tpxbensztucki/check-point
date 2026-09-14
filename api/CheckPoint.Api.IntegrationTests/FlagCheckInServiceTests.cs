@@ -137,7 +137,7 @@ public class FlagCheckInServiceTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
-        var projectService = new ProjectService(context, time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
 
         var membership = await context.ProjectMemberships.SingleAsync(m => m.ProjectId == _projectId && m.PersonId == person.Id);

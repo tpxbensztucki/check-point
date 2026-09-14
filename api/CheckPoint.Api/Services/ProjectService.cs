@@ -1,13 +1,11 @@
 using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace CheckPoint.Api.Services;
 
 // Projects and Person<->Project membership (spec Section 3).
-public class ProjectService(
-    CheckPointDbContext db, TimeProvider timeProvider, IOptions<NewStarterCycleOptions> newStarterCycleOptions)
+public class ProjectService(CheckPointDbContext db, TimeProvider timeProvider, AdminSettingsService adminSettingsService)
 {
     private static readonly FeedbackRequestStage[] NewStarterStages =
     [
@@ -161,9 +159,10 @@ public class ProjectService(
         //
         // IntervalWeeks is assumed to have exactly three entries, one per fixed
         // New Starter stage identity below (2/4/8-week by default) — reconfiguring
-        // the shape of this array, not just its values, is a bigger change left to
-        // CBLT-252 (Admin Settings) to define.
-        var intervalWeeks = newStarterCycleOptions.Value.IntervalWeeks;
+        // the shape of this array, not just its values, is a bigger change not
+        // covered by CBLT-252 (Admin Settings: interval schedule).
+        var settings = await adminSettingsService.GetAsync(cancellationToken);
+        var intervalWeeks = settings.NewStarterIntervalWeeks;
         for (var i = 0; i < intervalWeeks.Length && i < NewStarterStages.Length; i++)
         {
             db.FeedbackRequests.Add(new FeedbackRequest

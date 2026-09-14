@@ -763,6 +763,30 @@ setting at a time. `SettingsPage` groups the fields into three sections
 API has only the one flat row to read/write, matching every other
 full-field-set `PUT` convention in this codebase (e.g. `PUT /people/{id}`).
 
+CBLT-252 is the first setting to actually switch consumption over:
+`ProjectService.AddPersonAsync` now reads `NewStarterIntervalWeeks` from
+`AdminSettingsService.GetAsync()` instead of the old
+`IOptions<NewStarterCycleOptions>`, which is deleted along with its
+`Program.cs` registration — nothing else read it. `AdminSettingsService`
+gained a second validation rule beyond CBLT-251's baseline (non-empty,
+positive): the intervals must be strictly increasing, satisfying this
+ticket's own "reject a non-increasing schedule" AC — `SettingsPage` mirrors
+the same check client-side for immediate feedback, with the server as the
+authoritative guard either way. Every integration test that previously
+constructed `ProjectService` directly with
+`Options.Create(new NewStarterCycleOptions())` now passes
+`new AdminSettingsService(context)` instead — a mechanical swap across ~20
+call sites, since none of those tests cared about the interval source, only
+that `ProjectService` had *some* working settings dependency. The one test
+that did exercise a non-default interval (`ProjectServiceSchedulingTests`)
+now seeds a `AppSettings` row with custom `NewStarterIntervalWeeks` directly
+via the `DbContext` rather than building a custom `IOptions<T>`. "Already-
+scheduled requests are unaffected by a later setting change" (the ticket's
+third AC) holds structurally: `AddPersonAsync` reads the setting once, at
+the moment a Person joins, and bakes the resulting `ScheduledFor` dates onto
+that membership's own `FeedbackRequest` rows — there's no live re-read to
+retroactively drift.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

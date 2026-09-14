@@ -57,6 +57,12 @@ function SettingsPage() {
       return
     }
 
+    const isStrictlyIncreasing = intervals.every((n, i) => i === 0 || n > intervals[i - 1])
+    if (!isStrictlyIncreasing) {
+      setError('New Starter intervals must be in strictly increasing order.')
+      return
+    }
+
     const toSave: AdminSettings = { ...settings, newStarterIntervalWeeks: intervals }
     const success = await updateAdminSettings(toSave)
     if (success) {
