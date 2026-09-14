@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using CheckPoint.Api.Contracts;
+using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -43,11 +45,44 @@ public class MagicLinkEndpointsTests : IAsyncLifetime
         await _postgres.DisposeAsync();
     }
 
-    private async Task<string> IssueLinkAsync(Guid feedbackRequestId)
+    // PocId is a real FK (CBLT-302) — every link needs an actual Poc row, even
+    // though FeedbackRequestId stays a bare, unconstrained Guid.
+    private async Task<Guid> CreatePocAsync()
     {
         using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
+
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        var project = new Project { Name = "Website Revamp" };
+        var person = new Person { FullName = "Riley Reviewee", Practice = practice };
+        db.Practices.Add(practice);
+        db.Projects.Add(project);
+        db.People.Add(person);
+        await db.SaveChangesAsync();
+
+        var membership = new ProjectMembership { ProjectId = project.Id, PersonId = person.Id, JoinedAt = DateTimeOffset.UtcNow };
+        db.ProjectMemberships.Add(membership);
+        await db.SaveChangesAsync();
+
+        var poc = new Poc
+        {
+            ProjectMembershipId = membership.Id,
+            Name = "Jamie POC",
+            Email = "jamie@example.com",
+            Relationship = PocRelationship.Internal,
+            Role = PocRole.Tech,
+        };
+        db.Pocs.Add(poc);
+        await db.SaveChangesAsync();
+        return poc.Id;
+    }
+
+    private async Task<string> IssueLinkAsync(Guid feedbackRequestId)
+    {
+        var pocId = await CreatePocAsync();
+        using var scope = _factory.Services.CreateScope();
         var service = scope.ServiceProvider.GetRequiredService<MagicLinkService>();
-        var link = await service.IssueAsync(feedbackRequestId);
+        var link = await service.IssueAsync(feedbackRequestId, pocId);
         return link.Token;
     }
 

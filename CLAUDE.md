@@ -359,11 +359,15 @@ validation passes does the service call `MagicLinkService.LoadAndCheckAsync`
 and then mutate the same tracked `MagicLink` itself as part of one
 `SaveChangesAsync`, rather than calling `ConsumeAsync` separately and
 potentially consuming the link before knowing the submission will succeed). One
-`SaveChangesAsync` call marks the `MagicLink` used, sets the `FeedbackRequest`'s
-`Status` to `Sent`, inserts the immutable `FeedbackSubmission` row, and — if the
-Person has a `LineManagerId` set — inserts an `LmNotification` outbox row. There
-is deliberately no endpoint that edits a `FeedbackSubmission`: immutability
-(spec Section 8/10) is enforced by omission, not a guarded field. `LmNotification`
+`SaveChangesAsync` call marks the `MagicLink` used, inserts the immutable
+`FeedbackSubmission` row, and — if the Person has a `LineManagerId` set —
+inserts an `LmNotification` outbox row. `FeedbackRequest.Status` is deliberately
+left untouched by submission: it tracks the request's own dispatch lifecycle
+(`Scheduled`/`Sent`/`Cancelled`, `Sent` meaning "the request email was
+dispatched" — see CBLT-302 below), not response state, since a request can have
+several currently-assigned POCs each responding independently. There is
+deliberately no endpoint that edits a `FeedbackSubmission`: immutability (spec
+Section 8/10) is enforced by omission, not a guarded field. `LmNotification`
 is a durable outbox, not an actual send: real delivery is the Notifications
 epic's dispatch job (not yet built), but because the row is written in the same
 transaction as the submission it satisfies the ticket's "must not be silently
@@ -376,6 +380,24 @@ the "Thank you" confirmation on success, or an inline `role="alert"` message
 (keeping the form on screen) for an expired/already-used link or any other
 failure, guarding against a double-submit firing a second request while the
 first is still in flight.
+
+**CBLT-302 (bug fix, found while scoping CBLT-234):** `MagicLink` and
+`FeedbackSubmission` were both missing a `PocId` reference — CBLT-233's own AC
+required saving feedback "against the correct request, POC, Person, and
+Project," but no POC-to-magic-link relationship existed at all, since CBLT-231
+and CBLT-233's tests only ever issued links against an arbitrary
+`FeedbackRequestId`. This became unavoidable once CBLT-234 (per-POC email
+dispatch) needed to issue one magic link per currently-assigned POC, not one
+per request — and CBLT-237's own AC confirms outcomes are tracked **per POC**,
+not aggregated onto the request as a whole (`"a request with 3 POCs can have a
+mix of Submitted and No Response outcomes"`). Fixed by adding `PocId` (real FK
+to `Poc`) to both `MagicLink` and `FeedbackSubmission`, and changing
+`FeedbackSubmissions`' unique index from `FeedbackRequestId` alone to
+`(FeedbackRequestId, PocId)`, so each POC can submit independently for the same
+request but not twice. `MagicLinkService.IssueAsync` now takes a `pocId`
+parameter. Whether a given POC has responded is always answered by whether a
+`FeedbackSubmission` row exists for that `(FeedbackRequestId, PocId)` pair —
+never stored as a status on `FeedbackRequest` itself.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a

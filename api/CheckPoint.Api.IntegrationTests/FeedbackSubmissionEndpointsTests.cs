@@ -61,11 +61,23 @@ public class FeedbackSubmissionEndpointsTests : IAsyncLifetime
         var projectService = scope.ServiceProvider.GetRequiredService<ProjectService>();
         await projectService.AddPersonAsync(project.Id, person.Id);
 
+        var membership = await db.ProjectMemberships.SingleAsync(m => m.ProjectId == project.Id && m.PersonId == person.Id);
+        var poc = new Poc
+        {
+            ProjectMembershipId = membership.Id,
+            Name = "Jamie POC",
+            Email = "jamie@example.com",
+            Relationship = PocRelationship.Internal,
+            Role = PocRole.Tech,
+        };
+        db.Pocs.Add(poc);
+        await db.SaveChangesAsync();
+
         var feedbackRequest = await db.FeedbackRequests.SingleAsync(
-            r => r.ProjectMembership.ProjectId == project.Id && r.Stage == FeedbackRequestStage.NewStarterWeek2);
+            r => r.ProjectMembershipId == membership.Id && r.Stage == FeedbackRequestStage.NewStarterWeek2);
 
         var magicLinkService = scope.ServiceProvider.GetRequiredService<MagicLinkService>();
-        var link = await magicLinkService.IssueAsync(feedbackRequest.Id);
+        var link = await magicLinkService.IssueAsync(feedbackRequest.Id, poc.Id);
         return link.Token;
     }
 
