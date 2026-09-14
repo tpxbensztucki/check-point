@@ -57,5 +57,24 @@ public static class FeedbackRequestEndpoints
                 _ => Results.Problem(),
             };
         });
+
+        group.MapGet("/{id:guid}/pocs", async (Guid id, ClaimsPrincipal caller, RequestDispatchService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetPocStatusesAsync(
+                id,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocStatusViewStatus.Success => Results.Ok(result.Entries),
+                PocStatusViewStatus.RequestNotFound => Results.NotFound(result.Error),
+                PocStatusViewStatus.Forbidden => Results.Forbid(),
+                _ => Results.Problem(),
+            };
+        });
     }
 }
