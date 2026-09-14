@@ -87,7 +87,7 @@ public class PersonLeaverEndpointTests : IAsyncLifetime
         var response = await client.PostAsync($"/people/{_reportPersonId}/leaver", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal(PersonStatus.Leaver, person!.Status);
     }
 
@@ -99,7 +99,7 @@ public class PersonLeaverEndpointTests : IAsyncLifetime
         var response = await client.PostAsync($"/people/{_reportPersonId}/leaver", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal(PersonStatus.Leaver, person!.Status);
     }
 

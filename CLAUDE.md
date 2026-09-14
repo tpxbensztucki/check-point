@@ -728,6 +728,53 @@ All the actual write actions (create, update, assign/remove role, mark
 Leaver) already existed and are unchanged — this ticket is entirely new
 reads plus frontend wiring.
 
+CBLT-307 (`ProjectsPage`/`ProjectDetailPage` at
+`/dashboard/admin/projects[/:id]`) closes out the Admin Console milestone.
+New `GET /projects` and `GET /projects/{id}/people`
+(`ProjectService.GetAllAsync`/`GetMembersAsync`, both Admin-only) — the
+latter is the one genuinely new read: nothing before this browsed "who is
+currently on a Project" (the reverse of `GetProjectsForPersonAsync`).
+`ProjectDetailPage` manages membership (add via the CBLT-306 `PersonPicker`,
+remove) and, per member, a full POC list/add/edit/remove sub-section
+reusing the already-existing `ProjectMembershipPocsResponse` shape (which
+already computes `MissingStandardRoles` for the completeness indicator).
+All write actions (create/complete a Project, add/remove a member, POC
+CRUD) already existed and are unchanged.
+
+### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
+
+The API never configured a `JsonStringEnumConverter`, so **every** enum in
+**every** contract (`ProjectStatus`, `PersonStatus`, `PocResponseStatus`,
+`CatchUpStatus`, `CatchUpTriggerSource`, `PocRelationship`, `PocRole`,
+`CatchUpOutcomeType`, `FeedbackRequestStage`, ...) had, until now, silently
+serialized as its raw underlying integer — the plain `System.Text.Json`
+default — even though every frontend TypeScript type across every dashboard
+and admin screen (Milestones 7-9, 13) assumes the member's name as a string
+(e.g. `project.status === 'Active'`, `entry.status === 'Pending'`). Those
+comparisons had never actually matched anything in a real browser; nothing
+caught it because every frontend unit test stubs `fetch` with hand-written
+JSON that already used the intended string values, and no manual end-to-end
+click-through had exercised an enum-bearing comparison against the real API
+until CBLT-307's own manual smoke test (creating a POC with
+`"relationship":"Internal"` in the request body) got rejected outright by
+the server, which could only deserialize a number.
+
+Fixed with one line in `Program.cs` —
+`builder.Services.ConfigureHttpJsonOptions(options =>
+options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()))` —
+which fixes both directions for every current and future enum-bearing
+contract at once: incoming request bodies can now name an enum member by
+string (still also accepting the old numeric form, `JsonStringEnumConverter`'s
+default `allowIntegerValues: true`), and every response now sends the
+member's name, matching what the frontend already expected all along.
+`api/CheckPoint.Api.IntegrationTests/JsonTestOptions.cs` (new) mirrors this
+on the test side — `HttpClient.ReadFromJsonAsync<T>()` has no way to pick up
+the server's own `JsonOptions` automatically, so every one of the ~70 call
+sites across the integration test suite was mechanically updated to pass
+`JsonTestOptions.Value` explicitly. Outgoing `PostAsJsonAsync`/`PutAsJsonAsync`
+calls needed no changes — they still serialize C# enum values as numbers by
+default, which the server's converter accepts either way.
+
 ### CORS (bug fix, found while testing the dev seed data end-to-end in a browser)
 
 There was no CORS configuration anywhere in the API — the frontend and API have

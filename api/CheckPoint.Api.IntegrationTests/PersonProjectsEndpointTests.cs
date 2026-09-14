@@ -84,9 +84,9 @@ public class PersonProjectsEndpointTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var projectA = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         var projectB = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project B")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync($"/projects/{projectA!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
         await client.PostAsJsonAsync($"/projects/{projectB!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
         await client.PostAsJsonAsync(
@@ -96,7 +96,7 @@ public class PersonProjectsEndpointTests : IAsyncLifetime
         var response = await client.GetAsync($"/people/{_targetPersonId}/projects");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var summaries = await response.Content.ReadFromJsonAsync<List<PersonProjectSummary>>();
+        var summaries = await response.Content.ReadFromJsonAsync<List<PersonProjectSummary>>(JsonTestOptions.Value);
         Assert.Equal(2, summaries!.Count);
         var summaryA = summaries.Single(s => s.ProjectId == projectA.Id);
         Assert.Contains(PocRole.Dm, summaryA.MissingStandardRoles!);
@@ -109,13 +109,13 @@ public class PersonProjectsEndpointTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync($"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
         await client.PostAsync($"/projects/{project.Id}/complete", null);
 
         var response = await client.GetAsync($"/people/{_targetPersonId}/projects");
 
-        var summaries = await response.Content.ReadFromJsonAsync<List<PersonProjectSummary>>();
+        var summaries = await response.Content.ReadFromJsonAsync<List<PersonProjectSummary>>(JsonTestOptions.Value);
         var summary = summaries!.Single(s => s.ProjectId == project.Id);
         Assert.Equal(ProjectStatus.Completed, summary.Status);
         Assert.Null(summary.MissingStandardRoles);
@@ -126,7 +126,7 @@ public class PersonProjectsEndpointTests : IAsyncLifetime
     {
         using var admin = CreateClient(_adminPersonId);
         var project = await (await admin.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await admin.PostAsJsonAsync($"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
 
         using var client = CreateClient(_lineManagerPersonId);

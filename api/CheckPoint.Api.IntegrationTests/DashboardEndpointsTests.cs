@@ -77,7 +77,7 @@ public class DashboardEndpointsTests : IAsyncLifetime
         var response = await client.GetAsync("/dashboard/outstanding-requests");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var entries = await response.Content.ReadFromJsonAsync<List<OutstandingRequestEntry>>();
+        var entries = await response.Content.ReadFromJsonAsync<List<OutstandingRequestEntry>>(JsonTestOptions.Value);
         Assert.Empty(entries!);
     }
 
@@ -108,7 +108,7 @@ public class DashboardEndpointsTests : IAsyncLifetime
         var response = await client.GetAsync("/dashboard/flagged-people");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var entries = await response.Content.ReadFromJsonAsync<List<FlaggedPersonEntry>>();
+        var entries = await response.Content.ReadFromJsonAsync<List<FlaggedPersonEntry>>(JsonTestOptions.Value);
         Assert.Empty(entries!);
     }
 

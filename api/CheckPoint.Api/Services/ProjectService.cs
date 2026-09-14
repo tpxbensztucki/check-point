@@ -204,4 +204,22 @@ public class ProjectService(
 
         return ProjectMembershipRemovalResult.Removed();
     }
+
+    // Backs the Admin Console's Projects screen (CBLT-307) — the first flat
+    // browse view over every Project; every prior read here was either a
+    // create/complete result or a single-Person's-Projects view.
+    public async Task<IReadOnlyList<ProjectResponse>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await db.Projects
+            .Select(p => new ProjectResponse(p.Id, p.Name, p.Status))
+            .ToListAsync(cancellationToken);
+
+    // Who is currently (non-removed) on a Project (CBLT-307) — the reverse
+    // of GetProjectsForPersonAsync; no such view existed before this, since
+    // nothing before the Admin Console needed to browse a Project's people.
+    public async Task<IReadOnlyList<ProjectMembershipSummary>> GetMembersAsync(
+        Guid projectId, CancellationToken cancellationToken = default) =>
+        await db.ProjectMemberships
+            .Where(m => m.ProjectId == projectId && m.RemovedAt == null)
+            .Select(m => new ProjectMembershipSummary(m.Id, m.PersonId, m.Person.FullName, m.JoinedAt))
+            .ToListAsync(cancellationToken);
 }

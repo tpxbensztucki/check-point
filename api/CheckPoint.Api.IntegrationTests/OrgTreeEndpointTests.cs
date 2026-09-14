@@ -100,7 +100,7 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/org-tree");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>();
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
         Assert.Contains(admin.Id, allNodeIds);
         Assert.Contains(managerA.Id, allNodeIds);
@@ -145,7 +145,7 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/org-tree");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>();
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
 
         Assert.Contains(crossPracticeReport.Id, allNodeIds);
@@ -180,7 +180,7 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/org-tree");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>();
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
 
         Assert.Contains(manager.Id, allNodeIds);
@@ -226,7 +226,7 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         using var client = CreateClient(viewer.Id);
         var response = await client.GetAsync("/org-tree");
 
-        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>();
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
 
         Assert.Contains(practiceAPerson.Id, allNodeIds);
@@ -249,7 +249,7 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/org-tree");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>();
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         Assert.Empty(tree!);
     }
 

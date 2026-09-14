@@ -89,7 +89,7 @@ public class CatchUpEndpointsTests : IAsyncLifetime
             $"/catch-ups/{_catchUpId}/outcome", new RecordCatchUpOutcomeRequest(CatchUpOutcomeType.NoActionClosed, null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var catchUp = await response.Content.ReadFromJsonAsync<CatchUpResponse>();
+        var catchUp = await response.Content.ReadFromJsonAsync<CatchUpResponse>(JsonTestOptions.Value);
         Assert.Equal(CatchUpStatus.Recorded, catchUp!.Status);
     }
 

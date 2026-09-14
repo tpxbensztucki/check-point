@@ -96,7 +96,7 @@ public class MagicLinkEndpointsTests : IAsyncLifetime
         var response = await client.GetAsync($"/magic-links/{token}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<MagicLinkViewResponse>();
+        var body = await response.Content.ReadFromJsonAsync<MagicLinkViewResponse>(JsonTestOptions.Value);
         Assert.Equal(feedbackRequestId, body!.FeedbackRequestId);
     }
 

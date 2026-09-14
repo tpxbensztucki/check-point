@@ -119,3 +119,144 @@ export async function markAsLeaver(personId: string): Promise<boolean> {
   const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}/leaver`, { method: 'POST' })
   return response.ok
 }
+
+export type ProjectStatus = 'Active' | 'Completed'
+
+// Mirrors CheckPoint.Api/Contracts/ProjectContracts.cs.
+export interface Project {
+  id: string
+  name: string
+  status: ProjectStatus
+}
+
+export interface ProjectMember {
+  membershipId: string
+  personId: string
+  personName: string
+  joinedAt: string
+}
+
+// GET /projects (CBLT-307) — the first flat browse view over every Project.
+export async function fetchProjects(): Promise<Project[]> {
+  const response = await authorizedFetch('/projects')
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as Project[]
+}
+
+export async function createProject(name: string): Promise<boolean> {
+  const response = await authorizedFetch('/projects', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  return response.ok
+}
+
+export async function completeProject(projectId: string): Promise<boolean> {
+  const response = await authorizedFetch(`/projects/${encodeURIComponent(projectId)}/complete`, { method: 'POST' })
+  return response.ok
+}
+
+// GET /projects/{id}/people (CBLT-307) — the reverse of a Person's own
+// Projects view; nothing before this browsed a Project's current members.
+export async function fetchProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const response = await authorizedFetch(`/projects/${encodeURIComponent(projectId)}/people`)
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as ProjectMember[]
+}
+
+export async function addPersonToProject(projectId: string, personId: string): Promise<boolean> {
+  const response = await authorizedFetch(`/projects/${encodeURIComponent(projectId)}/people`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personId }),
+  })
+  return response.ok
+}
+
+export async function removePersonFromProject(projectId: string, personId: string): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}`,
+    { method: 'DELETE' },
+  )
+  return response.ok
+}
+
+export type PocRelationship = 'Internal' | 'External' | 'Client'
+export type PocRole = 'Tech' | 'Dm' | 'Other'
+
+// Mirrors CheckPoint.Api/Contracts/PocContracts.cs.
+export interface Poc {
+  id: string
+  name: string
+  email: string
+  relationship: PocRelationship
+  role: PocRole
+}
+
+export interface ProjectMembershipPocs {
+  projectMembershipId: string
+  pocs: Poc[]
+  missingStandardRoles: PocRole[]
+}
+
+export async function fetchPocs(projectId: string, personId: string): Promise<ProjectMembershipPocs | null> {
+  const response = await authorizedFetch(
+    `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}/pocs`,
+  )
+  if (!response.ok) {
+    return null
+  }
+
+  return (await response.json()) as ProjectMembershipPocs
+}
+
+export interface PocFormValues {
+  name: string
+  email: string
+  relationship: PocRelationship
+  role: PocRole
+}
+
+export async function createPoc(projectId: string, personId: string, values: PocFormValues): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}/pocs`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(values),
+    },
+  )
+  return response.ok
+}
+
+export async function updatePoc(
+  projectId: string,
+  personId: string,
+  pocId: string,
+  values: PocFormValues,
+): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}/pocs/${encodeURIComponent(pocId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(values),
+    },
+  )
+  return response.ok
+}
+
+export async function removePoc(projectId: string, personId: string, pocId: string): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/projects/${encodeURIComponent(projectId)}/people/${encodeURIComponent(personId)}/pocs/${encodeURIComponent(pocId)}`,
+    { method: 'DELETE' },
+  )
+  return response.ok
+}

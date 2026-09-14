@@ -94,7 +94,7 @@ public class AdHocReviewEndpointsTests : IAsyncLifetime
         var response = await client.PostAsync($"/people/{_reportPersonId}/ad-hoc-review", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var review = await response.Content.ReadFromJsonAsync<AdHocReviewResponse>();
+        var review = await response.Content.ReadFromJsonAsync<AdHocReviewResponse>(JsonTestOptions.Value);
         Assert.False(review!.AlreadyPending);
     }
 
@@ -127,7 +127,7 @@ public class AdHocReviewEndpointsTests : IAsyncLifetime
         var response = await client.PostAsync($"/people/{_reportPersonId}/ad-hoc-review", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var review = await response.Content.ReadFromJsonAsync<AdHocReviewResponse>();
+        var review = await response.Content.ReadFromJsonAsync<AdHocReviewResponse>(JsonTestOptions.Value);
         Assert.True(review!.AlreadyPending);
     }
 
