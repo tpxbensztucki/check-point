@@ -64,6 +64,31 @@ export async function fetchMagicLink(token: string): Promise<MagicLinkResult> {
   }
 }
 
+// Mirrors CheckPoint.Api/Contracts/OrgTreeContracts.cs's OrgPersonNode — a
+// forest (possibly several roots), not a single tree.
+export interface OrgPersonNode {
+  id: string
+  fullName: string
+  status: 'Employed' | 'Leaver'
+  practiceId: string
+  roles: string[]
+  isOrphaned: boolean
+  reports: OrgPersonNode[]
+}
+
+// GET /org-tree is already fully role-scoped server-side (Admin: everyone;
+// Practice Lead: own practice; Line Manager: self + direct reports) — this
+// just calls it, no client-side scoping logic (CBLT-245's own "no duplicate
+// tree implementation" AC).
+export async function fetchOrgTree(): Promise<OrgPersonNode[]> {
+  const response = await authorizedFetch('/org-tree')
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as OrgPersonNode[]
+}
+
 export type SubmitFeedbackStatus = 'success' | 'expired' | 'alreadyUsed' | 'notFound' | 'invalid' | 'error'
 
 export interface SubmitFeedbackResult {
