@@ -18,6 +18,7 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
     public DbSet<LmNotification> LmNotifications => Set<LmNotification>();
     public DbSet<AppSettings> AppSettings => Set<AppSettings>();
+    public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -124,6 +125,22 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .HasOne(n => n.LineManager)
             .WithMany()
             .HasForeignKey(n => n.LineManagerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Restrict on both sides — an audit entry must never be lost, even in
+        // a hypothetical future where a Person row is removed (Person is
+        // never actually deleted today, only marked Leaver, but this matches
+        // every other Person-referencing entity's convention in this file).
+        modelBuilder.Entity<AuditLogEntry>()
+            .HasOne(e => e.Viewer)
+            .WithMany()
+            .HasForeignKey(e => e.ViewerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AuditLogEntry>()
+            .HasOne(e => e.Person)
+            .WithMany()
+            .HasForeignKey(e => e.PersonId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

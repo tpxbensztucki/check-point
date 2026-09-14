@@ -45,6 +45,7 @@ builder.Services.AddScoped<CatchUpService>();
 builder.Services.AddScoped<DevPersonDirectoryService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminSettingsService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<FrontendOptions>(
     builder.Configuration.GetSection(FrontendOptions.SectionName));
@@ -156,6 +157,7 @@ app.MapFeedbackRequestEndpoints();
 app.MapCatchUpEndpoints();
 app.MapDashboardEndpoints();
 app.MapAdminSettingsEndpoints();
+app.MapAuditLogEndpoints();
 
 // Dev-only, unauthenticated — see DevEndpoints.cs. Same environment gate as
 // DevPersonAuthenticationHandler's own registration above.

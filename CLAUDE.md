@@ -871,6 +871,26 @@ case. Added a frontend regression test confirming typing in the POC name/
 email fields triggers no additional network call, closing the loop on the
 ticket's "no autocomplete/suggestion" BDD scenario.
 
+CBLT-249 (`AuditLogEntry`, `AuditLogService`, `GET /audit-log`, `AuditLogPage`
+at `/dashboard/admin/audit-log`) adds the immutable "who viewed/exported
+whose feedback, when" trail spec Section 11 requires. `AuditLogEntry`
+deliberately carries no reference to any specific `FeedbackSubmission` — only
+`ViewerId`/`PersonId`/`Action`/`OccurredAt` — so an entry survives intact
+once the 6-month post-leaver retention job (CBLT-248, not yet built) removes
+the feedback content it once referred to. `AuditLogService` only ever
+inserts (`RecordViewAsync`/`RecordExportAsync`) — there is no update/delete
+method, the same immutability-by-omission precedent as `FeedbackSubmission`.
+`GetLogAsync` combines its four optional filters (Person, viewer, from, to)
+with AND, Admin-only per the ticket's own AC. `RecordExportAsync` has no
+caller yet — CBLT-247 (PDF export, not yet built) will be its first, since
+its own AC requires every export to be audited. `RecordViewAsync` likewise
+has no caller: no endpoint anywhere today exposes a Person's actual feedback
+content to an internal viewer at all (only aggregate status, e.g.
+`DashboardService`'s submitted/outstanding counts) — the only planned
+mechanism for seeing content is the PDF export itself, so this hook stays
+dangling exactly like CBLT-227/230's cycle-engine hooks did in Milestone 5,
+wired up only once a real content-viewing feature exists to call it.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

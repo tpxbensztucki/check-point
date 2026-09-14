@@ -7,6 +7,7 @@ import FlaggedPeoplePage from './pages/FlaggedPeoplePage'
 import GuestFeedbackPage from './pages/GuestFeedbackPage'
 import OrgTreePage from './pages/OrgTreePage'
 import OutstandingRequestsPage from './pages/OutstandingRequestsPage'
+import AuditLogPage from './pages/admin/AuditLogPage'
 import DepartmentsPage from './pages/admin/DepartmentsPage'
 import PeoplePage from './pages/admin/PeoplePage'
 import PersonDetailPage from './pages/admin/PersonDetailPage'
@@ -35,6 +36,7 @@ function App() {
             <Route path="admin/projects" element={<ProjectsPage />} />
             <Route path="admin/projects/:projectId" element={<ProjectDetailPage />} />
             <Route path="admin/settings" element={<SettingsPage />} />
+            <Route path="admin/audit-log" element={<AuditLogPage />} />
           </Route>
         </Route>
       </Routes>
