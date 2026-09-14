@@ -7,6 +7,14 @@ public class Person
 {
     public Guid Id { get; set; }
     public required string FullName { get; set; }
+
+    // Optional today (CBLT-303) — no real sign-in exists yet to require or
+    // verify one, so nothing currently depends on every Person having it. It
+    // will become load-bearing once CBLT-211 (real AD SSO) and CBLT-235
+    // (per-submission LM notification email) exist; until then, a null Email
+    // simply means "nothing to send to yet" wherever it's needed.
+    public string? Email { get; set; }
+
     public PersonStatus Status { get; set; } = PersonStatus.Employed;
 
     // Orthogonal to Status (Employed/Leaver is an employment lifecycle state;

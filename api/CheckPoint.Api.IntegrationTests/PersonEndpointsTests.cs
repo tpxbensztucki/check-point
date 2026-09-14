@@ -177,6 +177,23 @@ public class PersonEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EmailIsOptionalAndRoundTripsThroughCreateAndUpdate()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var created = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        Assert.Null(person!.Email);
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person.Id}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
+
+        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        Assert.Equal("jamie@example.com", updated!.Email);
+    }
+
+    [Fact]
     public async Task PersonCannotBeSetAsTheirOwnLineManager()
     {
         using var client = CreateClient(_adminPersonId);
