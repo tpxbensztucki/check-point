@@ -891,6 +891,29 @@ mechanism for seeing content is the PDF export itself, so this hook stays
 dangling exactly like CBLT-227/230's cycle-engine hooks did in Milestone 5,
 wired up only once a real content-viewing feature exists to call it.
 
+## Milestone 10 (Export & Anonymisation)
+
+CBLT-246 (`Domain/FeedbackAnonymiser.cs`) is the core content transform spec
+Section 10 requires — pure logic, no EF Core, no HTTP, tested entirely in
+`CheckPoint.Api.UnitTests` (`FeedbackAnonymiserTests.cs`), the first ticket
+in this whole project whose behaviour lives entirely there rather than in
+the integration test suite. `IdentifiedFeedbackEntry` (the input, still
+carrying `RespondentName`/`RespondentEmail`/`RespondentRole`) is
+deliberately not the `FeedbackSubmission` entity itself, so this transform
+has zero database dependency and stays trivially reusable by any future
+anonymised view — `Anonymise` is a plain static method over an
+`IEnumerable<IdentifiedFeedbackEntry>`, callable from CBLT-247's PDF export
+or anything else without adjustment. `AnonymisedFeedbackEntry` (the output)
+has no name/email/role property at all, so there's nothing for a careless
+caller to accidentally forward — a stronger guarantee than filtering fields
+at the call site. Ordering is derived purely from the content itself
+(`DoingWell`/`NotDoingWell`/`NeedsToImprove`, ordinal, three-way
+tie-broken), never from submission time or POC list position — this
+satisfies both "no correlation clue back to a respondent" and
+"deterministic given the same input" simultaneously, since a pure
+content-derived sort key can never depend on input order or wall-clock
+time. Not yet wired to any endpoint — CBLT-247 will be its first caller.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in
