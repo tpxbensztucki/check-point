@@ -1,7 +1,6 @@
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Testcontainers.PostgreSql;
 
@@ -47,9 +46,6 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
         return new CheckPointDbContext(options);
     }
 
-    private static IOptions<NewStarterCycleOptions> DefaultOptions() =>
-        Options.Create(new NewStarterCycleOptions());
-
     [Fact]
     public async Task AddingAPersonToAProject_SchedulesRequestsAtTheDefaultIntervals()
     {
@@ -58,7 +54,7 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new ProjectService(context, time, DefaultOptions());
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
             await service.AddPersonAsync(_projectId, _personId);
         }
 
@@ -81,7 +77,7 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var service = new ProjectService(context, time, DefaultOptions());
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
             await service.AddPersonAsync(_projectId, _personId);
         }
 
@@ -100,11 +96,13 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
     {
         var joinedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
         var time = new FakeTimeProvider(joinedAt);
-        var customOptions = Options.Create(new NewStarterCycleOptions { IntervalWeeks = [3, 6, 10] });
 
         await using (var context = CreateContext())
         {
-            var service = new ProjectService(context, time, customOptions);
+            context.AppSettings.Add(new AppSettings { NewStarterIntervalWeeks = [3, 6, 10] });
+            await context.SaveChangesAsync();
+
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
             await service.AddPersonAsync(_projectId, _personId);
         }
 
@@ -121,13 +119,52 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ChangingTheIntervalSetting_DoesNotAffectAnAlreadyScheduledPerson()
+    {
+        var joinedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z");
+        var time = new FakeTimeProvider(joinedAt);
+        Guid secondPersonId;
+
+        await using (var context = CreateContext())
+        {
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
+            await service.AddPersonAsync(_projectId, _personId);
+
+            var secondPerson = new Person { FullName = "Jordan Newstarter", PracticeId = context.People.Single(p => p.Id == _personId).PracticeId };
+            context.People.Add(secondPerson);
+            await context.SaveChangesAsync();
+            secondPersonId = secondPerson.Id;
+
+            context.AppSettings.Add(new AppSettings { NewStarterIntervalWeeks = [3, 6, 10] });
+            await context.SaveChangesAsync();
+
+            await service.AddPersonAsync(_projectId, secondPersonId);
+        }
+
+        await using var verify = CreateContext();
+        var firstPersonDates = await verify.FeedbackRequests
+            .Where(r => r.ProjectMembership.PersonId == _personId)
+            .Select(r => r.ScheduledFor)
+            .OrderBy(d => d)
+            .ToListAsync();
+        var secondPersonDates = await verify.FeedbackRequests
+            .Where(r => r.ProjectMembership.PersonId == secondPersonId)
+            .Select(r => r.ScheduledFor)
+            .OrderBy(d => d)
+            .ToListAsync();
+
+        Assert.Equal([joinedAt.AddDays(14), joinedAt.AddDays(28), joinedAt.AddDays(56)], firstPersonDates);
+        Assert.Equal([joinedAt.AddDays(21), joinedAt.AddDays(42), joinedAt.AddDays(70)], secondPersonDates);
+    }
+
+    [Fact]
     public async Task CompletingAProject_CancelsItsScheduledFeedbackRequests()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
 
         await using (var context = CreateContext())
         {
-            var service = new ProjectService(context, time, DefaultOptions());
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
             await service.AddPersonAsync(_projectId, _personId);
             await service.CompleteProjectAsync(_projectId);
         }
@@ -155,7 +192,7 @@ public class ProjectServiceSchedulingTests : IAsyncLifetime
             await context.SaveChangesAsync();
             otherProjectId = otherProject.Id;
 
-            var service = new ProjectService(context, time, DefaultOptions());
+            var service = new ProjectService(context, time, new AdminSettingsService(context));
             await service.AddPersonAsync(_projectId, _personId);
             await service.AddPersonAsync(otherProjectId, _personId);
             await service.CompleteProjectAsync(_projectId);

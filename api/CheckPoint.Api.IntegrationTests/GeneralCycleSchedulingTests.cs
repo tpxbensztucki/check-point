@@ -52,7 +52,7 @@ public class GeneralCycleSchedulingTests : IAsyncLifetime
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
         await using var context = CreateContext();
-        var projectService = new ProjectService(context, time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, _personId);
 
         return await context.FeedbackRequests.Where(
@@ -193,7 +193,7 @@ public class GeneralCycleSchedulingTests : IAsyncLifetime
                 .SingleAsync();
 
             var projectService = new ProjectService(
-                context, TimeProvider.System, Options.Create(new NewStarterCycleOptions()));
+                context, TimeProvider.System, new AdminSettingsService(context));
             await projectService.CompleteProjectAsync(_projectId);
         }
 

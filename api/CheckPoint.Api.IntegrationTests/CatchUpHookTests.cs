@@ -55,7 +55,7 @@ public class CatchUpHookTests : IAsyncLifetime
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
         await using var context = CreateContext();
-        var projectService = new ProjectService(context, time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, _personId);
 
         var membership = await context.ProjectMemberships.SingleAsync(m => m.ProjectId == _projectId && m.PersonId == _personId);

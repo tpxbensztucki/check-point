@@ -79,6 +79,20 @@ describe('SettingsPage', () => {
     expect(fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PUT' }))
   })
 
+  it('rejects non-increasing New Starter intervals without calling the endpoint', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+
+    await screen.findByDisplayValue('2, 4, 8')
+    await user.clear(screen.getByLabelText(/new starter check-in intervals/i))
+    await user.type(screen.getByLabelText(/new starter check-in intervals/i), '8, 4, 2')
+    await user.click(screen.getByRole('button', { name: /save settings/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/strictly increasing/i)
+    expect(fetch).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PUT' }))
+  })
+
   it('shows an error message when saving fails', async () => {
     stubFetch({ putOk: false })
     const user = userEvent.setup()

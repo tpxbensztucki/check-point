@@ -57,8 +57,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
     // Schedules a New Starter cycle (via ProjectService, same as
     // FeedbackCycleServiceTests) and returns the id of its 2-week request, whose
-    // ScheduledFor is exactly JoinedAt + 2 weeks given the default
-    // NewStarterCycleOptions.
+    // ScheduledFor is exactly JoinedAt + 2 weeks given the default settings.
     private async Task<(Guid PersonId, Guid RequestId)> ScheduleRequestAsync()
     {
         await using var context = CreateContext();
@@ -66,7 +65,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         context.People.Add(person);
         await context.SaveChangesAsync();
 
-        var projectService = new ProjectService(context, _time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
 
         var request = await context.FeedbackRequests.SingleAsync(
@@ -190,7 +189,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var projectService = new ProjectService(context, _time, Options.Create(new NewStarterCycleOptions()));
+            var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
             await projectService.RemovePersonAsync(_projectId, personId);
         }
 
@@ -563,7 +562,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var projectService = new ProjectService(context, _time, Options.Create(new NewStarterCycleOptions()));
+            var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
             await projectService.RemovePersonAsync(_projectId, personId);
         }
 

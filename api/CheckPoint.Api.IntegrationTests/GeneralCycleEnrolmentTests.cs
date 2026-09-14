@@ -52,7 +52,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
     {
         time ??= new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
         await using var context = CreateContext();
-        var projectService = new ProjectService(context, time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(projectId ?? _projectId, personId ?? _personId);
 
         var membership = await context.ProjectMemberships.SingleAsync(
@@ -142,7 +142,7 @@ public class GeneralCycleEnrolmentTests : IAsyncLifetime
         await using (var context = CreateContext())
         {
             var projectService = new ProjectService(
-                context, TimeProvider.System, Options.Create(new NewStarterCycleOptions()));
+                context, TimeProvider.System, new AdminSettingsService(context));
             await projectService.CompleteProjectAsync(_projectId);
         }
 

@@ -46,8 +46,6 @@ builder.Services.AddScoped<DevPersonDirectoryService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminSettingsService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
-builder.Services.Configure<NewStarterCycleOptions>(
-    builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
 builder.Services.Configure<GeneralCycleOptions>(
     builder.Configuration.GetSection(GeneralCycleOptions.SectionName));
 builder.Services.Configure<RequestDispatchOptions>(

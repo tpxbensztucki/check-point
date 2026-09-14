@@ -66,7 +66,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         context.People.Add(person);
         await context.SaveChangesAsync();
 
-        var projectService = new ProjectService(context, _time, Options.Create(new NewStarterCycleOptions()));
+        var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
 
         var membership = await context.ProjectMemberships.SingleAsync(m => m.ProjectId == _projectId && m.PersonId == person.Id);
