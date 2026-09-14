@@ -45,7 +45,7 @@ public class FlagCheckInServiceTests : IAsyncLifetime
     }
 
     private static FeedbackCycleService CreateService(CheckPointDbContext context) =>
-        new(context, TimeProvider.System, Options.Create(new GeneralCycleOptions()));
+        new(context, TimeProvider.System, new AdminSettingsService(context));
 
     private async Task<(Guid PersonId, Guid RequestId)> CreatePersonWithAGeneralRequestAsync(Guid? lineManagerId = null)
     {

@@ -4,14 +4,14 @@ namespace CheckPoint.Api.Domain;
 // CBLT-251). Exactly one row ever exists — created lazily with these defaults
 // the first time AdminSettingsService.GetAsync is called on a fresh database.
 //
-// Every field here already existed as a hardcoded default or an interim
-// IOptions<T> config placeholder (formerly NewStarterCycleOptions, still
-// GeneralCycleOptions, RequestDispatchOptions) — this table is the
+// Every field here either used to live in a hardcoded default or an interim
+// IOptions<T> config placeholder (NewStarterCycleOptions and
+// GeneralCycleOptions, both now deleted — CBLT-252/253) or still does
+// (RequestDispatchOptions, pending CBLT-254) — this table is the
 // runtime-editable home those placeholders were always going to move to.
 // CBLT-251 added the table and the Admin-only read/write surface;
 // CBLT-252/253/254/255 each individually switch the consuming service from
-// reading the old IOptions<T> to reading this row, one setting at a time —
-// CBLT-252 (NewStarterIntervalWeeks, below) is the first to do so.
+// reading the old IOptions<T> to reading this row, one setting at a time.
 public class AppSettings
 {
     public Guid Id { get; set; }
@@ -20,7 +20,8 @@ public class AppSettings
     // ProjectService.AddPersonAsync (CBLT-252).
     public int[] NewStarterIntervalWeeks { get; set; } = [2, 4, 8];
 
-    // CBLT-253 — skip the next FY quarter if it starts within this many weeks.
+    // Skip the next FY quarter if it starts within this many weeks. Consumed
+    // by FeedbackCycleService.EnrolIntoGeneralCycleAsync (CBLT-253).
     public int GeneralCycleSkipThresholdWeeks { get; set; } = 4;
 
     // CBLT-254 — whether request emails send automatically on schedule, or

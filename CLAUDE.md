@@ -787,6 +787,22 @@ the moment a Person joins, and bakes the resulting `ScheduledFor` dates onto
 that membership's own `FeedbackRequest` rows — there's no live re-read to
 retroactively drift.
 
+CBLT-253 is the second setting switched over, following the exact pattern
+CBLT-252 established: `FeedbackCycleService.EnrolIntoGeneralCycleAsync` now
+reads `GeneralCycleSkipThresholdWeeks` from `AdminSettingsService.GetAsync()`
+instead of `IOptions<GeneralCycleOptions>`, which is deleted along with its
+`Program.cs` registration. No new validation was needed —
+`AdminSettingsService`'s baseline "positive value" check from CBLT-251
+already satisfies this ticket's "reject a zero/negative threshold" AC. Every
+integration test constructing `FeedbackCycleService` directly with
+`Options.Create(new GeneralCycleOptions())` was mechanically swapped to
+`new AdminSettingsService(context)`; `GeneralCycleSchedulingTests`'
+`CreateService` helper dropped its now-unused `skipThresholdWeeks`
+parameter (no test actually overrode the default), and gained a new test
+proving a configured 6-week threshold changes the skip decision a 5-week-out
+enrolment makes, where the previous test already proves the 4-week default
+does not skip at the same distance.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in
