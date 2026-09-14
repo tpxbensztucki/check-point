@@ -1,8 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import DashboardLayout from './components/DashboardLayout'
 import RequireCurrentPerson from './components/RequireCurrentPerson'
-import ComingSoonPage from './pages/ComingSoonPage'
+import CatchUpOutcomePage from './pages/CatchUpOutcomePage'
 import DashboardHomePage from './pages/DashboardHomePage'
+import FlaggedPeoplePage from './pages/FlaggedPeoplePage'
 import GuestFeedbackPage from './pages/GuestFeedbackPage'
 import OrgTreePage from './pages/OrgTreePage'
 import OutstandingRequestsPage from './pages/OutstandingRequestsPage'
@@ -19,8 +20,9 @@ function App() {
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHomePage />} />
             <Route path="outstanding-requests" element={<OutstandingRequestsPage />} />
-            <Route path="flagged-people" element={<ComingSoonPage title="Flagged / Under Review" />} />
+            <Route path="flagged-people" element={<FlaggedPeoplePage />} />
             <Route path="org-tree" element={<OrgTreePage />} />
+            <Route path="people/:personId/catch-up" element={<CatchUpOutcomePage />} />
           </Route>
         </Route>
       </Routes>

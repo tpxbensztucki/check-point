@@ -19,3 +19,16 @@ public record OutstandingRequestEntry(
     string PocName,
     FeedbackRequestStage Stage,
     PocResponseStatus Status);
+
+// One Person currently Under Review with a Pending CatchUp (CBLT-244) —
+// deliberately keyed off "has a Pending CatchUp", not "UnderReviewSince is
+// set": after an EscalateFurther outcome, UnderReviewSince deliberately
+// stays set (CBLT-241) but that CatchUp's own Status becomes Recorded, so
+// the Person correctly stops appearing here until a fresh flag or ad-hoc
+// trigger opens a new CatchUp for them.
+public record FlaggedPersonEntry(
+    Guid PersonId,
+    string PersonName,
+    Guid CatchUpId,
+    CatchUpTriggerSource TriggerSource,
+    DateTimeOffset PendingSince);

@@ -134,6 +134,76 @@ export async function sendReminder(feedbackRequestId: string, pocId: string): Pr
   return response.ok
 }
 
+// Mirrors CheckPoint.Api/Contracts/DashboardContracts.cs's FlaggedPersonEntry.
+export type CatchUpTriggerSource = 'CheckIn' | 'AdHoc'
+
+export interface FlaggedPersonEntry {
+  personId: string
+  personName: string
+  catchUpId: string
+  triggerSource: CatchUpTriggerSource
+  pendingSince: string
+}
+
+// GET /dashboard/flagged-people is already role-scoped server-side (Admin:
+// org-wide; Practice Lead: own practice) and already excludes resolved
+// catch-ups (CBLT-244's own "once resolved, no longer appears" AC).
+export async function fetchFlaggedPeople(): Promise<FlaggedPersonEntry[]> {
+  const response = await authorizedFetch('/dashboard/flagged-people')
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as FlaggedPersonEntry[]
+}
+
+// Mirrors CheckPoint.Api/Contracts/CatchUpContracts.cs.
+export type CatchUpStatus = 'Pending' | 'Recorded'
+export type CatchUpOutcomeType = 'SixWeekCheckInAdded' | 'NoActionClosed' | 'EscalateFurther' | 'Other'
+
+export interface CatchUpEntry {
+  id: string
+  personId: string
+  feedbackRequestId: string | null
+  triggerSource: CatchUpTriggerSource
+  status: CatchUpStatus
+  createdAt: string
+  outcomeType: CatchUpOutcomeType | null
+  outcomeNotes: string | null
+  recordedAt: string | null
+}
+
+export interface PersonCatchUpHistory {
+  personId: string
+  underReviewSince: string | null
+  entries: CatchUpEntry[]
+}
+
+// GET /people/{personId}/catch-ups (CBLT-242) — this is the first frontend
+// caller; CBLT-241/242 shipped backend-only in Milestone 8.
+export async function fetchCatchUpHistory(personId: string): Promise<PersonCatchUpHistory | null> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}/catch-ups`)
+  if (!response.ok) {
+    return null
+  }
+
+  return (await response.json()) as PersonCatchUpHistory
+}
+
+// POST /catch-ups/{catchUpId}/outcome (CBLT-241).
+export async function recordCatchUpOutcome(
+  catchUpId: string,
+  outcomeType: CatchUpOutcomeType,
+  notes: string,
+): Promise<boolean> {
+  const response = await authorizedFetch(`/catch-ups/${encodeURIComponent(catchUpId)}/outcome`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ outcomeType, notes: notes || null }),
+  })
+  return response.ok
+}
+
 export type SubmitFeedbackStatus = 'success' | 'expired' | 'alreadyUsed' | 'notFound' | 'invalid' | 'error'
 
 export interface SubmitFeedbackResult {
