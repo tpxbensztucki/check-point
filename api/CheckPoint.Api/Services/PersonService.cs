@@ -40,6 +40,7 @@ public class PersonService(CheckPointDbContext db)
             PracticeId = request.PracticeId,
             LineManagerId = request.LineManagerId,
             HeadOfPracticeId = request.HeadOfPracticeId,
+            Email = request.Email,
         };
         db.People.Add(person);
         await db.SaveChangesAsync(cancellationToken);
@@ -90,6 +91,7 @@ public class PersonService(CheckPointDbContext db)
         person.PracticeId = request.PracticeId;
         person.LineManagerId = request.LineManagerId;
         person.HeadOfPracticeId = request.HeadOfPracticeId;
+        person.Email = request.Email;
         await db.SaveChangesAsync(cancellationToken);
 
         return PersonUpdateResult.Updated(ToResponse(person));
@@ -214,5 +216,5 @@ public class PersonService(CheckPointDbContext db)
     }
 
     private static PersonResponse ToResponse(Person person) => new(
-        person.Id, person.FullName, person.Status, person.PracticeId, person.LineManagerId, person.HeadOfPracticeId);
+        person.Id, person.FullName, person.Status, person.PracticeId, person.LineManagerId, person.HeadOfPracticeId, person.Email);
 }

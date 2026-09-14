@@ -176,6 +176,15 @@ with a computed `IsOrphaned` flag: true when a Person has no `LineManagerId`, or
 their Line Manager's own `PracticeId` differs from theirs. It's computed fresh on
 every read (not a stored column), so it can never go stale when either Person's
 Practice or Line Manager changes later — no separate recalculation step needed.
+
+**CBLT-303 (add-on, prerequisite for CBLT-235):** `Person.Email` is a new
+**nullable** `string?` field, settable via the existing `POST /people` and `PUT
+/people/{id}` endpoints. Deliberately not `required` — no real sign-in exists
+yet to require or verify one, and making it required would have forced every
+existing `new Person { ... }` test call site across the integration suite to
+change for no functional benefit today. It becomes load-bearing once CBLT-211
+(real AD SSO) and CBLT-235 (per-submission LM notification email, Milestone 7)
+exist; until then, a null `Email` just means "nothing to send to yet."
 Since the endpoint filters to one Practice before returning results, a Line
 Manager tagged to a different Practice never appears in another Practice's list,
 even though their report (tagged to that Practice) does, flagged Orphaned.

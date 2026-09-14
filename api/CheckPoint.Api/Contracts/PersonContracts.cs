@@ -6,13 +6,15 @@ public record CreatePersonRequest(
     string FullName,
     Guid PracticeId,
     Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
+    Guid? HeadOfPracticeId,
+    string? Email = null);
 
 public record UpdatePersonRequest(
     string FullName,
     Guid PracticeId,
     Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
+    Guid? HeadOfPracticeId,
+    string? Email = null);
 
 public record PersonResponse(
     Guid Id,
@@ -20,7 +22,8 @@ public record PersonResponse(
     PersonStatus Status,
     Guid PracticeId,
     Guid? LineManagerId,
-    Guid? HeadOfPracticeId);
+    Guid? HeadOfPracticeId,
+    string? Email);
 
 // PracticeId is required when RoleName is RoleNames.PracticeLead (designates which
 // Practice the Person owns as its lead) and ignored otherwise.
