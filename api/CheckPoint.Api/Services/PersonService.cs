@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace CheckPoint.Api.Services;
 
 // People, their Roles, and the Leaver transition (spec Sections 2-4).
-public class PersonService(CheckPointDbContext db)
+public class PersonService(CheckPointDbContext db, TimeProvider timeProvider)
 {
     public async Task<PersonCreationResult> CreateAsync(
         CreatePersonRequest request, CancellationToken cancellationToken = default)
@@ -210,6 +210,7 @@ public class PersonService(CheckPointDbContext db)
         // transition is also deliberately one-way — there is no "un-leaver"
         // action, per this story's acceptance criteria.
         person.Status = PersonStatus.Leaver;
+        person.LeaverSince = timeProvider.GetUtcNow();
         await db.SaveChangesAsync(cancellationToken);
 
         return LeaverTransitionResult.MarkedAsLeaver(ToResponse(person));
