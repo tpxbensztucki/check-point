@@ -40,6 +40,22 @@ builder.Services.Configure<FrontendOptions>(
 builder.Services.Configure<SmtpOptions>(
     builder.Configuration.GetSection(SmtpOptions.SectionName));
 
+// The frontend and API are always served from different origins (different
+// ports locally via Docker Compose, separate Container Apps once deployed) —
+// the browser calls the API directly, with no reverse proxy in between, so
+// this has always been needed; it just went unnoticed until CBLT-304 added
+// the first frontend screen that actually calls an endpoint from a real
+// browser (every guest-flow test stubs fetch directly and never exercises
+// real CORS enforcement). Reuses FrontendOptions.BaseUrl — the frontend's own
+// origin is already config-driven for the magic-link emails, so there's no
+// second setting to keep in sync.
+var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"] ?? new FrontendOptions().BaseUrl;
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins(frontendBaseUrl).AllowAnyHeader().AllowAnyMethod());
+});
+
 // Not registered in "Testing" (integration tests) — see the background service's
 // own doc comment for why.
 if (!builder.Environment.IsEnvironment("Testing"))
@@ -114,6 +130,7 @@ if (!runningInContainer && app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
