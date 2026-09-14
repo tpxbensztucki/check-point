@@ -81,6 +81,17 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
     db.Database.Migrate();
+
+    // Dev/local-only seed data (one Person per role) — see DevDataSeeder's own
+    // doc comment. Deliberately gated to Development specifically (not just
+    // "not Production" like the dev auth scheme/endpoint below) — integration
+    // tests run in a "Testing" environment against a fresh database per test
+    // class and assert on an otherwise-empty People table, so seeding there
+    // would corrupt every test's fixture.
+    if (app.Environment.IsDevelopment())
+    {
+        await DevDataSeeder.SeedAsync(db);
+    }
 }
 
 // Configure the HTTP request pipeline.
