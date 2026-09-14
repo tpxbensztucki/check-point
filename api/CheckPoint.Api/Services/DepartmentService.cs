@@ -82,4 +82,16 @@ public class DepartmentService(CheckPointDbContext db)
 
         return PracticePeopleViewResult.Success(people);
     }
+
+    // Backs the Admin Console's org structure screen (CBLT-305) — the first
+    // browse view for Departments/Practices; every prior read here was either
+    // a create or a Practice-scoped, role-gated view.
+    public async Task<IReadOnlyList<DepartmentWithPracticesResponse>> GetAllAsync(
+        CancellationToken cancellationToken = default) =>
+        await db.Departments
+            .Select(d => new DepartmentWithPracticesResponse(
+                d.Id,
+                d.Name,
+                d.Practices.Select(p => new PracticeResponse(p.Id, p.Name, p.DepartmentId)).ToList()))
+            .ToListAsync(cancellationToken);
 }

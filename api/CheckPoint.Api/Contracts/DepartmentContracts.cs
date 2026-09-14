@@ -7,6 +7,11 @@ public record CreatePracticeRequest(string Name);
 public record DepartmentResponse(Guid Id, string Name);
 public record PracticeResponse(Guid Id, string Name, Guid DepartmentId);
 
+// Backs the Admin Console's org structure screen (CBLT-305) — the browse
+// view over the org hierarchy, distinct from the plain DepartmentResponse a
+// create action returns.
+public record DepartmentWithPracticesResponse(Guid Id, string Name, IReadOnlyList<PracticeResponse> Practices);
+
 // IsOrphaned is true when LineManagerId is unset, or the Line Manager's own
 // PracticeId differs from this Person's (spec Section 2) — computed on every read
 // by DepartmentService, not stored, so it can never go stale when either Person's

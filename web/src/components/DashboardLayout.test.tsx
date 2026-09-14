@@ -49,4 +49,17 @@ describe('DashboardLayout', () => {
     expect(screen.getByText('Sign-in page')).toBeInTheDocument()
     expect(getCurrentPerson()).toBeNull()
   })
+
+  it('shows the Admin nav section for a person holding the Admin role', () => {
+    renderLayout()
+
+    expect(screen.getByRole('link', { name: /admin: departments/i })).toBeInTheDocument()
+  })
+
+  it('hides the Admin nav section for a person without the Admin role', () => {
+    setCurrentPerson({ id: 'p2', fullName: 'Lee Lead', roles: ['Practice Lead'] })
+    renderLayout()
+
+    expect(screen.queryByRole('link', { name: /admin: departments/i })).not.toBeInTheDocument()
+  })
 })

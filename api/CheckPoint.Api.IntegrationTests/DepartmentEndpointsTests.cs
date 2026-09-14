@@ -111,6 +111,37 @@ public class DepartmentEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Admin_SeesEveryDepartmentWithItsNestedPractices()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var departmentResponse = await client.PostAsJsonAsync(
+            "/departments", new CreateDepartmentRequest("Tech & Data"));
+        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>();
+        await client.PostAsJsonAsync(
+            $"/departments/{department!.Id}/practices", new CreatePracticeRequest("Software Engineering"));
+
+        var response = await client.GetAsync("/departments");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var departments = await response.Content.ReadFromJsonAsync<List<DepartmentWithPracticesResponse>>();
+        // InitializeAsync already seeds one Department ("Tech & Data" from the
+        // shared practice fixture) alongside the one this test creates.
+        var created = departments!.Single(d => d.Id == department.Id);
+        Assert.Equal("Tech & Data", created.Name);
+        Assert.Single(created.Practices, p => p.Name == "Software Engineering");
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotListDepartments()
+    {
+        using var client = CreateClient(_nonAdminPersonId);
+
+        var response = await client.GetAsync("/departments");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task NonAdmin_CannotCreateDepartment()
     {
         using var client = CreateClient(_nonAdminPersonId);

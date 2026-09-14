@@ -690,6 +690,29 @@ one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 already holds (e.g. to change which Practice they lead) is rejected — that's left
 for a future story, since neither the spec nor the current backlog covers it.
 
+## Milestone 13 (Admin Console)
+
+New milestone, added once the dashboard was actually clicked through in a
+browser: there is no frontend anywhere for creating or editing a Department,
+Practice, Person, Project, or POC — all of it has been backend-API-only
+since Milestones 3/4. This is permanent, essential functionality, not
+throwaway test tooling — AD SSO (CBLT-211) will authenticate people, but it
+will never supply org/people/project data, so this application always has
+to be where that data is entered and maintained.
+
+CBLT-305 (`DepartmentsPage` at `/dashboard/admin/departments`) is the first
+ticket — org structure management. New `GET /departments`
+(`DepartmentService.GetAllAsync`, Admin-only) returns every Department with
+its nested Practices via `DepartmentWithPracticesResponse` — the first
+browse view over the org hierarchy; every existing `DepartmentService`
+method before this was either a create or a Practice-scoped, role-gated
+read. No edit/delete for either Department or Practice — the backend has no
+update/delete endpoint for either today, and this ticket doesn't introduce
+one. `DashboardLayout`'s nav gained an "Admin" section, shown only when the
+signed-in person holds the `Admin` role (a client-side UX nicety — the real
+enforcement stays server-side, unchanged) — CBLT-306/307 will add their own
+links to it.
+
 ### CORS (bug fix, found while testing the dev seed data end-to-end in a browser)
 
 There was no CORS configuration anywhere in the API — the frontend and API have
