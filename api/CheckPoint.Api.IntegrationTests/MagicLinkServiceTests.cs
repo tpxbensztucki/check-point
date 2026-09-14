@@ -121,6 +121,30 @@ public class MagicLinkServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnInvalidatedLink_IsRejectedAsSuperseded()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        string token;
+        await using (var context = CreateContext(time))
+        {
+            var link = await new MagicLinkService(context, time).IssueAsync(Guid.NewGuid(), _pocId);
+            token = link.Token;
+        }
+
+        await using (var reminderContext = CreateContext(time))
+        {
+            var link = await reminderContext.MagicLinks.SingleAsync(l => l.Token == token);
+            link.InvalidatedAt = time.GetUtcNow();
+            await reminderContext.SaveChangesAsync();
+        }
+
+        await using var verifyContext = CreateContext(time);
+        var result = await new MagicLinkService(verifyContext, time).ValidateAsync(token);
+
+        Assert.Equal(MagicLinkValidationStatus.Superseded, result.Status);
+    }
+
+    [Fact]
     public async Task UnknownToken_IsRejectedAsNotFound()
     {
         var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));

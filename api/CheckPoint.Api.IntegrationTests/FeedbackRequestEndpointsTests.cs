@@ -21,6 +21,7 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
     private Guid _otherLineManagerPersonId;
     private Guid _targetPersonId;
     private Guid _requestId;
+    private Guid _pocId;
 
     public async Task InitializeAsync()
     {
@@ -68,14 +69,15 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
         db.ProjectMemberships.Add(membership);
         await db.SaveChangesAsync();
 
-        db.Pocs.Add(new Poc
+        var poc = new Poc
         {
             ProjectMembershipId = membership.Id,
             Name = "Jamie POC",
             Email = "jamie@example.com",
             Relationship = PocRelationship.Internal,
             Role = PocRole.Tech,
-        });
+        };
+        db.Pocs.Add(poc);
         var request = new FeedbackRequest
         {
             ProjectMembershipId = membership.Id,
@@ -90,6 +92,7 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
         _otherLineManagerPersonId = otherLineManager.Id;
         _targetPersonId = target.Id;
         _requestId = request.Id;
+        _pocId = poc.Id;
     }
 
     public async Task DisposeAsync()
@@ -166,5 +169,50 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
         var response = await client.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_CanSendAReminderAfterDispatch()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        await admin.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
+
+        var response = await admin.PostAsync($"/feedback-requests/{_requestId}/pocs/{_pocId}/remind", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, _emailSender.Sent.Count);
+    }
+
+    [Fact]
+    public async Task ALineManagerWithNoRelationToThePerson_CannotSendAReminder()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        await admin.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
+
+        using var client = CreateClient(_otherLineManagerPersonId);
+        var response = await client.PostAsync($"/feedback-requests/{_requestId}/pocs/{_pocId}/remind", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AReminderForARequestNotYetDispatched_ReturnsConflict()
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsync($"/feedback-requests/{_requestId}/pocs/{_pocId}/remind", null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AReminderForAnUnknownPoc_ReturnsNotFound()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        await admin.PostAsync($"/feedback-requests/{_requestId}/dispatch", null);
+
+        var response = await admin.PostAsync($"/feedback-requests/{_requestId}/pocs/{Guid.NewGuid()}/remind", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 }

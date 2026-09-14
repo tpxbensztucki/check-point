@@ -33,5 +33,29 @@ public static class FeedbackRequestEndpoints
                 _ => Results.Problem(),
             };
         });
+
+        group.MapPost("/{id:guid}/pocs/{pocId:guid}/remind", async (
+            Guid id, Guid pocId, ClaimsPrincipal caller, RequestDispatchService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.SendReminderAsync(
+                id,
+                pocId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                ReminderStatus.Sent => Results.Ok(),
+                ReminderStatus.RequestNotFound => Results.NotFound(result.Error),
+                ReminderStatus.PocNotFound => Results.NotFound(result.Error),
+                ReminderStatus.Forbidden => Results.Forbid(),
+                ReminderStatus.NotYetDispatched => Results.Conflict(result.Error),
+                ReminderStatus.AlreadySubmitted => Results.Conflict(result.Error),
+                _ => Results.Problem(),
+            };
+        });
     }
 }

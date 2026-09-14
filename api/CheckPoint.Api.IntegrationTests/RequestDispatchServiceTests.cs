@@ -308,4 +308,136 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
         Assert.Equal(RequestDispatchStatus.RequestNotFound, result.Status);
     }
+
+    private static string ExtractToken(SentEmail email) =>
+        email.Body.Split("/feedback/")[1].Split('\n')[0].Trim();
+
+    [Fact]
+    public async Task AReminder_IssuesAFreshLinkAndInvalidatesThePriorOne()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var originalToken = ExtractToken(emailSender.Sent.Single());
+
+        var result = await service.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(ReminderStatus.Sent, result.Status);
+        Assert.Equal(2, emailSender.Sent.Count);
+        var newToken = ExtractToken(emailSender.Sent[1]);
+        Assert.NotEqual(originalToken, newToken);
+
+        var magicLinkService = new MagicLinkService(context, _time);
+        var originalResult = await magicLinkService.ValidateAsync(originalToken);
+        Assert.Equal(MagicLinkValidationStatus.Superseded, originalResult.Status);
+
+        var newResult = await magicLinkService.ValidateAsync(newToken);
+        Assert.Equal(MagicLinkValidationStatus.Valid, newResult.Status);
+    }
+
+    [Fact]
+    public async Task AReminder_CanBeTriggeredMultipleTimesWithoutDuplicatingTheRequest()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        await service.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var secondResult = await service.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(ReminderStatus.Sent, secondResult.Status);
+        Assert.Equal(3, emailSender.Sent.Count);
+
+        var requestCount = await context.FeedbackRequests.CountAsync(r => r.Id == requestId);
+        Assert.Equal(1, requestCount);
+    }
+
+    [Fact]
+    public async Task AReminderForAPocWhoAlreadySubmitted_IsUnavailable()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var dispatchService = CreateService(context, emailSender);
+        await dispatchService.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var token = ExtractToken(emailSender.Sent.Single());
+
+        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        await submissionService.SubmitAsync(token, new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
+            "Great work.", "Nothing much.", "Keep it up."));
+
+        var result = await dispatchService.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(ReminderStatus.AlreadySubmitted, result.Status);
+        Assert.Single(emailSender.Sent);
+    }
+
+    [Fact]
+    public async Task AReminderForARequestNotYetDispatched_IsRejected()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var result = await CreateService(context, emailSender).SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(ReminderStatus.NotYetDispatched, result.Status);
+        Assert.Empty(emailSender.Sent);
+    }
+
+    [Fact]
+    public async Task ALineManagerWithNoRelationToThePerson_CannotSendAReminder()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var result = await service.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: false, callerIsPracticeLead: false, callerIsLineManager: true);
+
+        Assert.Equal(ReminderStatus.Forbidden, result.Status);
+        Assert.Single(emailSender.Sent);
+    }
+
+    [Fact]
+    public async Task AnUnknownPocId_ReturnsPocNotFound()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        var result = await service.SendReminderAsync(
+            requestId, Guid.NewGuid(), Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+
+        Assert.Equal(ReminderStatus.PocNotFound, result.Status);
+    }
 }

@@ -7,10 +7,11 @@ namespace CheckPoint.Api.Services;
 // Sends the POC feedback request email containing a magic link (spec Section 7).
 // One MagicLink (and one email) per currently-assigned POC on the request's
 // ProjectMembership, scoped to that POC and that specific request only
-// (CBLT-302 made this possible). Callable two ways: DispatchDueAutomaticRequestsAsync
+// (CBLT-302 made this possible). Three entry points: DispatchDueAutomaticRequestsAsync
 // is the Automatic-mode driver, polled by RequestDispatchBackgroundService;
 // DispatchManuallyAsync is the authorised-user trigger used when the global mode
-// is Manual (or as a forced send regardless of mode).
+// is Manual (or as a forced send regardless of mode); SendReminderAsync (CBLT-236)
+// resends to a single non-responding POC on an already-dispatched request.
 public class RequestDispatchService(
     CheckPointDbContext db,
     TimeProvider timeProvider,
@@ -102,25 +103,94 @@ public class RequestDispatchService(
         return RequestDispatchResult.Dispatched;
     }
 
+    // Resends the request to one POC who hasn't yet responded (spec Section 5.4,
+    // 7) — a plain resend, not a new FeedbackRequest: issues a fresh magic link
+    // (fresh 7-day expiry) and invalidates whatever prior, still-usable link(s)
+    // existed for this exact (request, POC) pair, so the old one stops working.
+    // Callable repeatedly; each call supersedes the previous link.
+    public async Task<ReminderResult> SendReminderAsync(
+        Guid feedbackRequestId,
+        Guid pocId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await db.FeedbackRequests
+            .Include(r => r.ProjectMembership).ThenInclude(m => m.Person)
+            .SingleOrDefaultAsync(r => r.Id == feedbackRequestId, cancellationToken);
+        if (request is null)
+        {
+            return ReminderResult.RequestNotFound($"No FeedbackRequest found with id {feedbackRequestId}.");
+        }
+
+        if (!await IsAuthorizedAsync(
+                request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        {
+            return ReminderResult.Forbidden;
+        }
+
+        if (request.Status != FeedbackRequestStatus.Sent)
+        {
+            return ReminderResult.NotYetDispatched(
+                $"FeedbackRequest {feedbackRequestId} is {request.Status}, not Sent — nothing to remind about yet.");
+        }
+
+        var poc = await db.Pocs.SingleOrDefaultAsync(
+            p => p.Id == pocId && p.ProjectMembershipId == request.ProjectMembershipId, cancellationToken);
+        if (poc is null)
+        {
+            return ReminderResult.PocNotFound($"No Poc found with id {pocId} on this request.");
+        }
+
+        var alreadySubmitted = await db.FeedbackSubmissions.AnyAsync(
+            s => s.FeedbackRequestId == feedbackRequestId && s.PocId == pocId, cancellationToken);
+        if (alreadySubmitted)
+        {
+            return ReminderResult.AlreadySubmitted("This POC has already submitted feedback for this request.");
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var stillUsableLinks = await db.MagicLinks
+            .Where(l => l.FeedbackRequestId == feedbackRequestId && l.PocId == pocId
+                && l.UsedAt == null && l.InvalidatedAt == null)
+            .ToListAsync(cancellationToken);
+        foreach (var link in stillUsableLinks)
+        {
+            link.InvalidatedAt = now;
+        }
+
+        await SendRequestEmailAsync(request, request.ProjectMembership, poc, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return ReminderResult.Sent;
+    }
+
     private async Task DispatchToAllPocsAsync(FeedbackRequest request, CancellationToken cancellationToken)
     {
         var membership = request.ProjectMembership;
-        var baseUrl = frontendOptions.Value.BaseUrl.TrimEnd('/');
-
         foreach (var poc in membership.Pocs)
         {
-            var link = await magicLinkService.IssueAsync(request.Id, poc.Id, cancellationToken);
-            var feedbackUrl = $"{baseUrl}/feedback/{link.Token}";
-            var body = $"Hi {poc.Name},\n\n"
-                + $"Please share your feedback on {membership.Person.FullName}'s work: {feedbackUrl}\n\n"
-                + "This link is valid for 7 days and can only be used once.";
-
-            await emailSender.SendAsync(
-                poc.Email, $"Feedback request: {membership.Person.FullName}", body, cancellationToken);
+            await SendRequestEmailAsync(request, membership, poc, cancellationToken);
         }
 
         request.Status = FeedbackRequestStatus.Sent;
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task SendRequestEmailAsync(
+        FeedbackRequest request, ProjectMembership membership, Poc poc, CancellationToken cancellationToken)
+    {
+        var baseUrl = frontendOptions.Value.BaseUrl.TrimEnd('/');
+        var link = await magicLinkService.IssueAsync(request.Id, poc.Id, cancellationToken);
+        var feedbackUrl = $"{baseUrl}/feedback/{link.Token}";
+        var body = $"Hi {poc.Name},\n\n"
+            + $"Please share your feedback on {membership.Person.FullName}'s work: {feedbackUrl}\n\n"
+            + "This link is valid for 7 days and can only be used once.";
+
+        await emailSender.SendAsync(
+            poc.Email, $"Feedback request: {membership.Person.FullName}", body, cancellationToken);
     }
 
     // Same scoping as PocService.IsAuthorizedAsync (Admin, or the Line Manager /

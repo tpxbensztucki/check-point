@@ -402,11 +402,12 @@ never stored as a status on `FeedbackRequest` itself.
 Milestone 7 (Notifications & Response Tracking): CBLT-234 (`RequestDispatchService`)
 sends the POC feedback request email containing a magic link. One `MagicLink` (and
 one email) per currently-assigned POC on the request's `ProjectMembership` — each
-scoped to that POC and that request only, per CBLT-302's fix. Two entry points:
+scoped to that POC and that request only, per CBLT-302's fix. Entry points:
 `DispatchDueAutomaticRequestsAsync` (the Automatic-mode driver, polled every minute
-by `RequestDispatchBackgroundService`, an `IHostedService`) and `DispatchManuallyAsync`
+by `RequestDispatchBackgroundService`, an `IHostedService`), `DispatchManuallyAsync`
 (the authorised-user trigger, `POST /feedback-requests/{id}/dispatch`, same
-Admin-or-LM-or-PracticeLead scoping as `PocService`). The global mode is
+Admin-or-LM-or-PracticeLead scoping as `PocService`), and `SendReminderAsync`
+(CBLT-236, below). The global mode is
 `RequestDispatchOptions.Mode` (`Automatic`/`Manual`, config-bound, interim until
 CBLT-254's Admin Settings toggle exists) — the background job only sends when
 `Automatic`; the manual endpoint works regardless of mode, since an authorised user
@@ -430,6 +431,24 @@ mirroring `ProjectService.CompleteProjectAsync`'s existing cancel-on-completion
 behaviour for the narrower per-Person case. A due request with zero currently
 assigned POCs is left `Scheduled` and retried on the next automatic pass rather
 than being marked `Sent` with nothing actually sent.
+
+CBLT-236 (`RequestDispatchService.SendReminderAsync`, `POST
+/feedback-requests/{id}/pocs/{pocId}/remind`) resends to one non-responding POC —
+a plain resend, not a new `FeedbackRequest`: issues a fresh `MagicLink` (fresh
+7-day expiry) and invalidates whatever prior, still-usable link(s) existed for
+that exact `(FeedbackRequest, Poc)` pair, so the old one stops working. This
+needed a new `MagicLink.InvalidatedAt` field, distinct from `UsedAt` — a
+superseded link was never used to submit, it was just replaced. `MagicLinkService`
+and `FeedbackSubmissionService` both gained a `Superseded` status (mapped to `410
+Gone`, same as `Expired`, on both the link-view and submission endpoints) so a
+guest who still has an old link sees "replaced by a more recent one" rather than
+the misleading "already submitted." Rejected with `NotYetDispatched` if the
+request isn't `Sent` yet, or `AlreadySubmitted` if a `FeedbackSubmission` already
+exists for that POC — matching CBLT-237's per-POC (not per-request) response
+model. Scoped down: the two UI surfaces the ticket names (a Person's detail view,
+the Admin/Practice Lead Dashboard) don't exist yet (Milestone 9) — this ships the
+backend capability (the endpoint) only; wiring a reminder button into either view
+is for whoever builds those screens.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
