@@ -70,7 +70,8 @@ public class GeneralCycleSchedulingTests : IAsyncLifetime
     {
         var finalRequestId = await ScheduleNewStarterCycleAndGetFinalRequestIdAsync();
 
-        // 2026-02-18 is 5 weeks (35 days) before the Apr 1 FY-quarter boundary.
+        // 2026-02-18 is 6 weeks (42 days) before the Apr 1 FY-quarter boundary —
+        // outside the default 4-week threshold, so it isn't skipped.
         var enrolmentTime = DateTimeOffset.Parse("2026-02-18T00:00:00Z");
         await using (var context = CreateContext())
         {
@@ -106,11 +107,10 @@ public class GeneralCycleSchedulingTests : IAsyncLifetime
     {
         var finalRequestId = await ScheduleNewStarterCycleAndGetFinalRequestIdAsync();
 
-        // 2026-02-18 is 5 weeks (35 days) before the Apr 1 FY-quarter boundary —
-        // inside a 6-week threshold, but outside the default 4-week one (see
-        // EnrolmentFiveWeeksBeforeTheNextQuarter_SchedulesThatUpcomingQuarter,
-        // which asserts the opposite outcome at the default threshold).
-        var enrolmentTime = DateTimeOffset.Parse("2026-02-18T00:00:00Z");
+        // 2026-02-25 is exactly 5 weeks (35 days) before the Apr 1 FY-quarter
+        // boundary — inside a 6-week threshold (35 < 42), but outside the
+        // default 4-week one (35 is not < 28), so the default would not skip.
+        var enrolmentTime = DateTimeOffset.Parse("2026-02-25T00:00:00Z");
         await using (var context = CreateContext())
         {
             // ScheduleNewStarterCycleAndGetFinalRequestIdAsync's own ProjectService
