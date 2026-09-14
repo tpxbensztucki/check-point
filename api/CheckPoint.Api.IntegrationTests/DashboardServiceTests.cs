@@ -78,6 +78,15 @@ public class DashboardServiceTests : IAsyncLifetime
         return request.Id;
     }
 
+    private async Task DispatchTwoWeekRequestAsync(Guid personId)
+    {
+        var requestId = await GetTwoWeekRequestIdAsync(personId);
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        await CreateDispatchService(context, emailSender).DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+    }
+
     private async Task<Guid> AddPocAsync(Guid personId, string name, string email)
     {
         await using var context = CreateContext();
@@ -100,8 +109,10 @@ public class DashboardServiceTests : IAsyncLifetime
     {
         var personA = await CreatePersonAsync(_practiceId);
         await AddPocAsync(personA, "Jamie A", "jamie.a@example.com");
+        await DispatchTwoWeekRequestAsync(personA);
         var personB = await CreatePersonAsync(_otherPracticeId);
         await AddPocAsync(personB, "Jamie B", "jamie.b@example.com");
+        await DispatchTwoWeekRequestAsync(personB);
 
         await using var context = CreateContext();
         var result = await CreateService(context).GetOutstandingRequestsAsync(
@@ -116,8 +127,10 @@ public class DashboardServiceTests : IAsyncLifetime
     {
         var personA = await CreatePersonAsync(_practiceId);
         await AddPocAsync(personA, "Jamie A", "jamie.a@example.com");
+        await DispatchTwoWeekRequestAsync(personA);
         var personB = await CreatePersonAsync(_otherPracticeId);
         await AddPocAsync(personB, "Jamie B", "jamie.b@example.com");
+        await DispatchTwoWeekRequestAsync(personB);
 
         Guid leadId;
         await using (var context = CreateContext())

@@ -12,9 +12,13 @@ namespace CheckPoint.Api.Services;
 // CatchUpService).
 public class DashboardService(CheckPointDbContext db, TimeProvider timeProvider)
 {
-    // "Outstanding" means the live-computed status for a (request, POC) pair
-    // isn't Submitted — NotYetSent, Sent (awaiting response), or NoResponse
-    // (CBLT-243's own two example statuses). Reuses
+    // "Outstanding" only makes sense for a request that has actually been
+    // dispatched (Status == Sent) — a still-Scheduled request hasn't asked
+    // anyone for anything yet, so it's excluded here rather than surfacing
+    // every not-yet-due future check-in as if it needed a response. Within a
+    // Sent request, an entry counts if its live-computed status isn't
+    // Submitted — NotYetSent (a POC added after dispatch), Sent (awaiting
+    // response), or NoResponse (CBLT-243's own two example statuses). Reuses
     // RequestDispatchService.ComputePocStatus, the exact same live-computed
     // logic GetPocStatusesAsync uses for a single request, rather than
     // reimplementing it for this org-wide view.
@@ -37,7 +41,7 @@ public class DashboardService(CheckPointDbContext db, TimeProvider timeProvider)
             .Include(r => r.ProjectMembership).ThenInclude(m => m.Project)
             .Include(r => r.ProjectMembership).ThenInclude(m => m.Person)
             .Include(r => r.ProjectMembership).ThenInclude(m => m.Pocs)
-            .Where(r => r.Status != FeedbackRequestStatus.Cancelled && r.ProjectMembership.RemovedAt == null);
+            .Where(r => r.Status == FeedbackRequestStatus.Sent && r.ProjectMembership.RemovedAt == null);
 
         if (visiblePersonIds is not null)
         {
