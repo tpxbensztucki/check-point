@@ -111,7 +111,15 @@ public class AdminSettingsEndpointsTests : IAsyncLifetime
 
         var getResponse = await client.GetAsync("/admin/settings");
         var reread = await getResponse.Content.ReadFromJsonAsync<AdminSettingsResponse>(JsonTestOptions.Value);
-        Assert.Equal(updated, reread);
+        // Record equality does reference, not value, comparison for the
+        // NewStarterIntervalWeeks array field, so compare properties
+        // individually rather than the whole record.
+        Assert.Equal(updated.NewStarterIntervalWeeks, reread!.NewStarterIntervalWeeks);
+        Assert.Equal(updated.GeneralCycleSkipThresholdWeeks, reread.GeneralCycleSkipThresholdWeeks);
+        Assert.Equal(updated.AutomaticRequestSendingEnabled, reread.AutomaticRequestSendingEnabled);
+        Assert.Equal(updated.TargetTechPocCount, reread.TargetTechPocCount);
+        Assert.Equal(updated.TargetDmPocCount, reread.TargetDmPocCount);
+        Assert.Equal(updated.TargetOtherPocCount, reread.TargetOtherPocCount);
     }
 
     [Fact]
