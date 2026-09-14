@@ -22,7 +22,23 @@ function PersonPicker({
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    fetchPeople().then(setPeople)
+    let cancelled = false
+    fetchPeople()
+      .then((result) => {
+        if (!cancelled) {
+          setPeople(result)
+        }
+      })
+      // A real network fetch (unlike this component's own tests' stubbed
+      // one) can reject rather than resolve with a bad status — swallowed
+      // here since this is used twice on the same page (Line Manager, Head
+      // of Practice) and a transient failure on one shouldn't surface as an
+      // unhandled rejection.
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const options = useMemo(
