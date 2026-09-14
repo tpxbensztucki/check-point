@@ -99,5 +99,28 @@ public static class PersonEndpoints
                 _ => Results.Problem(),
             };
         });
+
+        // Three-way, same scoping as the ad-hoc-review route above (spec
+        // Section 5.3, CBLT-242: "Admin: all; Practice Lead: own practice; LM:
+        // own reports").
+        leaverGroup.MapGet("/{personId:guid}/catch-ups", async (
+            Guid personId, ClaimsPrincipal caller, CatchUpService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetHistoryAsync(
+                personId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PersonCatchUpHistoryStatus.Success => Results.Ok(result.History),
+                PersonCatchUpHistoryStatus.PersonNotFound => Results.NotFound(result.Error),
+                PersonCatchUpHistoryStatus.Forbidden => Results.Forbid(),
+                _ => Results.Problem(),
+            };
+        });
     }
 }
