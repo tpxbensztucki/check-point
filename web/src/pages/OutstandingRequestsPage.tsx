@@ -1,0 +1,118 @@
+import { useEffect, useMemo, useState } from 'react'
+import {
+  fetchOutstandingRequests,
+  sendReminder,
+  type FeedbackRequestStage,
+  type OutstandingRequestEntry,
+} from '../api'
+
+type LoadState = { kind: 'loading' } | { kind: 'loaded'; entries: OutstandingRequestEntry[] }
+
+const STAGE_LABELS: Record<FeedbackRequestStage, string> = {
+  NewStarterWeek2: '2-week New Starter check-in',
+  NewStarterWeek4: '4-week New Starter check-in',
+  NewStarterWeek6: '6-week New Starter check-in',
+  NewStarterWeek8: '8-week New Starter check-in',
+  General: 'Quarterly (General) cycle',
+}
+
+const STAGE_ORDER: FeedbackRequestStage[] = [
+  'NewStarterWeek2',
+  'NewStarterWeek4',
+  'NewStarterWeek6',
+  'NewStarterWeek8',
+  'General',
+]
+
+// CBLT-243 — GET /dashboard/outstanding-requests is already role-scoped
+// server-side; grouping "by cycle" (the ticket's own AC) happens here since
+// every entry already carries Stage.
+function OutstandingRequestsPage() {
+  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({})
+
+  useEffect(() => {
+    fetchOutstandingRequests().then((entries) => {
+      setState({ kind: 'loaded', entries })
+    })
+  }, [])
+
+  const grouped = useMemo(() => {
+    if (state.kind !== 'loaded') {
+      return []
+    }
+
+    return STAGE_ORDER.map((stage) => ({
+      stage,
+      entries: state.entries.filter((e) => e.stage === stage),
+    })).filter((group) => group.entries.length > 0)
+  }, [state])
+
+  async function handleRemind(entry: OutstandingRequestEntry) {
+    const key = `${entry.feedbackRequestId}:${entry.pocId}`
+    setReminderState((prev) => ({ ...prev, [key]: 'sending' }))
+    const success = await sendReminder(entry.feedbackRequestId, entry.pocId)
+    setReminderState((prev) => ({ ...prev, [key]: success ? 'sent' : 'failed' }))
+  }
+
+  return (
+    <div>
+      <h1 className="text-xl font-semibold text-gray-900">Outstanding Requests</h1>
+
+      {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading outstanding requests…</p>}
+
+      {state.kind === 'loaded' && grouped.length === 0 && (
+        <p className="mt-4 text-sm text-gray-500">Nothing outstanding right now.</p>
+      )}
+
+      {grouped.map((group) => (
+        <section key={group.stage} className="mt-6">
+          <h2 className="text-sm font-semibold text-gray-700">{STAGE_LABELS[group.stage]}</h2>
+          <div className="mt-2 overflow-x-auto rounded-md border border-gray-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                <tr>
+                  <th className="px-3 py-2">Person</th>
+                  <th className="px-3 py-2">Project</th>
+                  <th className="px-3 py-2">POC</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {group.entries.map((entry) => {
+                  const key = `${entry.feedbackRequestId}:${entry.pocId}`
+                  const canRemind = entry.status === 'Sent' || entry.status === 'NoResponse'
+                  const reminder = reminderState[key]
+
+                  return (
+                    <tr key={key} className="border-t border-gray-100">
+                      <td className="px-3 py-2">{entry.personName}</td>
+                      <td className="px-3 py-2">{entry.projectName}</td>
+                      <td className="px-3 py-2">{entry.pocName}</td>
+                      <td className="px-3 py-2">{entry.status}</td>
+                      <td className="px-3 py-2">
+                        {canRemind && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemind(entry)}
+                            disabled={reminder === 'sending'}
+                            className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            {reminder === 'sent' ? 'Reminder sent' : reminder === 'failed' ? 'Failed — retry' : 'Remind'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+export default OutstandingRequestsPage

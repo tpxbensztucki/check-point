@@ -29,40 +29,11 @@ public class OrgTreeService(CheckPointDbContext db)
     {
         IQueryable<Person> scope = db.People;
 
-        if (!callerIsAdmin)
+        var visibleIds = await PersonAuthorizationHelpers.GetVisiblePersonIdsAsync(
+            db, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken);
+
+        if (visibleIds is not null)
         {
-            var visibleIds = new HashSet<Guid>();
-
-            if (callerIsPracticeLead)
-            {
-                var ledPracticeIds = await db.Practices
-                    .Where(p => p.PracticeLeadId == callerId)
-                    .Select(p => p.Id)
-                    .ToListAsync(cancellationToken);
-
-                if (ledPracticeIds.Count > 0)
-                {
-                    var practicePeopleIds = await db.People
-                        .Where(p => ledPracticeIds.Contains(p.PracticeId))
-                        .Select(p => p.Id)
-                        .ToListAsync(cancellationToken);
-                    visibleIds.UnionWith(practicePeopleIds);
-                }
-            }
-
-            if (callerIsLineManager)
-            {
-                // Only direct reports, not the reports of those reports — a Line
-                // Manager sees exactly one level below themselves, per this
-                // story's acceptance criteria.
-                visibleIds.Add(callerId);
-                var reportIds = await db.People
-                    .Where(p => p.LineManagerId == callerId)
-                    .Select(p => p.Id)
-                    .ToListAsync(cancellationToken);
-                visibleIds.UnionWith(reportIds);
-            }
-
             if (visibleIds.Count == 0)
             {
                 return [];
