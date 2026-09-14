@@ -103,5 +103,27 @@ public static class PocEndpoints
                 _ => Results.Forbid(),
             };
         });
+
+        // Not nested under the group above — a Poc's response history isn't
+        // scoped to a specific /projects/{projectId}/people/{personId} route,
+        // only to the Poc itself (CBLT-238).
+        app.MapGet("/pocs/{pocId:guid}/response-history", async (
+            Guid pocId, ClaimsPrincipal caller, PocResponseHistoryService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetPocHistoryAsync(
+                pocId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PocHistoryStatus.Success => Results.Ok(result.History),
+                PocHistoryStatus.PocNotFound => Results.NotFound(result.Error),
+                _ => Results.Forbid(),
+            };
+        }).RequireAuthorization();
     }
 }

@@ -24,6 +24,7 @@ builder.Services.AddScoped<FeedbackCycleService>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
 builder.Services.AddScoped<RequestDispatchService>();
 builder.Services.AddScoped<LmNotificationDispatchService>();
+builder.Services.AddScoped<PocResponseHistoryService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
