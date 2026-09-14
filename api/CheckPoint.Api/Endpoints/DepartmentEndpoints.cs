@@ -11,6 +11,8 @@ public static class DepartmentEndpoints
     {
         var group = app.MapGroup("/departments").RequireAuthorization(policy => policy.RequireRole(RoleNames.Admin));
 
+        group.MapGet("/", async (DepartmentService service) => Results.Ok(await service.GetAllAsync()));
+
         group.MapPost("/", async (CreateDepartmentRequest request, DepartmentService service) =>
         {
             var result = await service.CreateDepartmentAsync(request.Name);

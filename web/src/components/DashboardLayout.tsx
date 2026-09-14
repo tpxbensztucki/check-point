@@ -13,6 +13,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 function DashboardLayout() {
   const person = getCurrentPerson()!
   const navigate = useNavigate()
+  const isAdmin = person.roles.includes('Admin')
 
   function handleSignOut() {
     clearCurrentPerson()
@@ -51,6 +52,14 @@ function DashboardLayout() {
         <NavLink to="/dashboard/org-tree" className={navLinkClass}>
           Org Tree
         </NavLink>
+        {isAdmin && (
+          <>
+            <span className="mx-1 self-center text-gray-300">|</span>
+            <NavLink to="/dashboard/admin/departments" className={navLinkClass}>
+              Admin: Departments
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <main className="p-6">
