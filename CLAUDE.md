@@ -822,6 +822,30 @@ is untouched, since the second pass finds nothing due (the mode only gates
 whether the pass runs `dueRequests` selection at all, not any already-Sent
 row).
 
+CBLT-255 closes out the Admin Settings milestone, changing
+`PocRoleHelpers.ComputeMissingRoles`'s meaning of "missing" from "zero
+representatives of this role" to "fewer than the Admin-configured target
+count for this role" — its signature grew a
+`IReadOnlyDictionary<PocRole, int> targetCounts` parameter fed by
+`AdminSettingsService.ToPocRoleTargets(settings)` (a new small static
+helper shared by both call sites, avoiding each duplicating the
+settings-fields-to-dictionary mapping). Both existing callers —
+`PocService.BuildResponseAsync` and `ProjectService.GetProjectsForPersonAsync`
+— now take `AdminSettingsService` as a constructor dependency and fetch the
+current targets before computing. Unlike CBLT-252/253/254, there was no
+prior `IOptions<T>` placeholder to delete here — the "exactly one of each
+role" default lived as an implicit assumption baked directly into
+`ComputeMissingRoles`'s old single-argument signature, not a named config
+class — and no test constructs `PocService`/`ProjectService`'s completeness
+path directly with a bespoke dependency (both are only exercised through
+HTTP endpoints via `WebApplicationFactory`), so this ticket needed no
+mechanical test-file sweep like the previous three. Default behaviour under
+the unmodified 1/1/1 target is unchanged, confirmed by the full existing
+`PocEndpointsTests`/`PersonProjectsEndpointTests` suites passing unmodified,
+plus two new tests: raising the Tech target to 2 flags a Project with only
+one Tech POC as incomplete, and assigning a POC beyond a role's target is
+still allowed and never flagged missing.
+
 ### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
 
 The API never configured a `JsonStringEnumConverter`, so **every** enum in

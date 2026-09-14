@@ -7,11 +7,12 @@ namespace CheckPoint.Api.Services;
 // Admin Settings screen (spec Section 13, CBLT-251) — a single, lazily-created
 // singleton row (see GetOrCreateRowAsync) covering every admin-configurable
 // value that used to live in a hardcoded default or an interim IOptions<T>
-// placeholder. CBLT-252/253/254 have already switched their consuming
-// services (ProjectService, FeedbackCycleService, RequestDispatchService)
-// over to reading this row instead of the now-deleted
-// NewStarterCycleOptions/GeneralCycleOptions/RequestDispatchOptions; only
-// CBLT-255 (POC role-count targets) remains.
+// placeholder. CBLT-252/253/254/255 have all switched their consuming
+// services (ProjectService, FeedbackCycleService, RequestDispatchService,
+// PocService) over to reading this row instead of the now-deleted
+// NewStarterCycleOptions/GeneralCycleOptions/RequestDispatchOptions, or (for
+// CBLT-255's POC role-count targets, which never had an IOptions<T> stand-in)
+// a hardcoded "exactly one of each role" default in PocRoleHelpers.
 public class AdminSettingsService(CheckPointDbContext db)
 {
     public async Task<AdminSettingsResponse> GetAsync(CancellationToken cancellationToken = default)
@@ -85,6 +86,17 @@ public class AdminSettingsService(CheckPointDbContext db)
 
         return true;
     }
+
+    // Shared by PocService and ProjectService (CBLT-255) to feed
+    // PocRoleHelpers.ComputeMissingRoles without each duplicating the
+    // settings-fields-to-dictionary mapping.
+    public static IReadOnlyDictionary<PocRole, int> ToPocRoleTargets(AdminSettingsResponse settings) =>
+        new Dictionary<PocRole, int>
+        {
+            [PocRole.Tech] = settings.TargetTechPocCount,
+            [PocRole.Dm] = settings.TargetDmPocCount,
+            [PocRole.Other] = settings.TargetOtherPocCount,
+        };
 
     private static AdminSettingsResponse ToResponse(AppSettings row) => new(
         row.NewStarterIntervalWeeks,

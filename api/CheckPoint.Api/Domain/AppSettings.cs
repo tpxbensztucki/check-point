@@ -28,8 +28,9 @@ public class AppSettings
     // RequestDispatchService.DispatchDueAutomaticRequestsAsync (CBLT-254).
     public bool AutomaticRequestSendingEnabled { get; set; } = true;
 
-    // CBLT-255 — target POC counts per role, used by the completeness
-    // indicator. Not a hard cap — a Project may have more or fewer.
+    // Target POC counts per role, used by the completeness indicator
+    // (PocRoleHelpers.ComputeMissingRoles, CBLT-255). Not a hard cap — a
+    // Project may have more or fewer.
     public int TargetTechPocCount { get; set; } = 1;
     public int TargetDmPocCount { get; set; } = 1;
     public int TargetOtherPocCount { get; set; } = 1;
