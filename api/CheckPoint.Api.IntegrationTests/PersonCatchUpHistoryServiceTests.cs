@@ -139,11 +139,20 @@ public class PersonCatchUpHistoryServiceTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         var cycleService = CreateCycleService(context);
+        var catchUpService = CreateCatchUpService(context);
         var flagResult = await cycleService.FlagCheckInAsync(request.Id, lineManagerId, callerIsAdmin: false, callerIsLineManager: true);
+
+        // The check-in-triggered catch-up must be resolved first — while it's
+        // still Pending, TriggerAdHocReviewAsync's own guard would just
+        // surface it again rather than create a second one (CBLT-240).
+        await catchUpService.RecordOutcomeAsync(
+            flagResult.CatchUp!.Id, CatchUpOutcomeType.NoActionClosed, null,
+            lineManagerId, callerIsAdmin: false, callerIsPracticeLead: false, callerIsLineManager: true);
+
         await cycleService.TriggerAdHocReviewAsync(
             personId, lineManagerId, callerIsAdmin: false, callerIsPracticeLead: false, callerIsLineManager: true);
 
-        var result = await CreateCatchUpService(context).GetHistoryAsync(
+        var result = await catchUpService.GetHistoryAsync(
             personId, lineManagerId, callerIsAdmin: false, callerIsPracticeLead: false, callerIsLineManager: true);
 
         Assert.Equal(2, result.History!.Entries.Count);
