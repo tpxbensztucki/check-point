@@ -23,6 +23,7 @@ builder.Services.AddScoped<PocService>();
 builder.Services.AddScoped<FeedbackCycleService>();
 builder.Services.AddScoped<FeedbackSubmissionService>();
 builder.Services.AddScoped<RequestDispatchService>();
+builder.Services.AddScoped<LmNotificationDispatchService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
@@ -40,6 +41,7 @@ builder.Services.Configure<SmtpOptions>(
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddHostedService<RequestDispatchBackgroundService>();
+    builder.Services.AddHostedService<LmNotificationDispatchBackgroundService>();
 }
 
 // DevPersonAuthenticationHandler is a stand-in for real sign-in until CBLT-211 (AD

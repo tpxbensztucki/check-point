@@ -478,6 +478,22 @@ request was already dispatched (no link was ever issued to them) reads as
 `FeedbackRequest`-shaped responses (previously `FeedbackRequest` had no view
 endpoint of its own, only the dispatch/reminder actions).
 
+CBLT-235 (`LmNotificationDispatchService.DispatchPendingNotificationsAsync`,
+polled every minute by `LmNotificationDispatchBackgroundService` — same
+not-registered-in-`"Testing"` pattern as `RequestDispatchBackgroundService`)
+delivers the `LmNotification` outbox CBLT-233 already queues one row per
+submission for, never batched — three respondents submitting at different times
+means three separate emails to the LM, not one combined notification, per this
+ticket's own AC. A pending row whose `LineManager.Email` is null is skipped
+(left pending, retried next pass) rather than treated as a failure — same
+reasoning as "no Line Manager assigned" elsewhere. The email contains a link,
+never the feedback content itself (spec Section 7's sensitivity requirement);
+the link points at `{FrontendOptions.BaseUrl}/people/{personId}`, a route that
+**does not exist in the frontend yet** — no Person-detail view is built until
+Milestone 9. No magic-link-style token is needed for this link (unlike the
+guest flow): an LM is a standing system user, so once that page exists it's
+protected by ordinary `[Authorize]`, not a one-time link.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
