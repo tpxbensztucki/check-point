@@ -78,8 +78,8 @@ public class RequestDispatchService(
             return RequestDispatchResult.RequestNotFound($"No FeedbackRequest found with id {feedbackRequestId}.");
         }
 
-        if (!await IsAuthorizedAsync(
-                request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        if (!await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+                db, request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
         {
             return RequestDispatchResult.Forbidden;
         }
@@ -127,8 +127,8 @@ public class RequestDispatchService(
             return ReminderResult.RequestNotFound($"No FeedbackRequest found with id {feedbackRequestId}.");
         }
 
-        if (!await IsAuthorizedAsync(
-                request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        if (!await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+                db, request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
         {
             return ReminderResult.Forbidden;
         }
@@ -191,8 +191,8 @@ public class RequestDispatchService(
             return PocStatusResult.RequestNotFound($"No FeedbackRequest found with id {feedbackRequestId}.");
         }
 
-        if (!await IsAuthorizedAsync(
-                request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
+        if (!await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+                db, request.ProjectMembership.Person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken))
         {
             return PocStatusResult.Forbidden;
         }
@@ -274,32 +274,4 @@ public class RequestDispatchService(
             poc.Email, $"Feedback request: {membership.Person.FullName}", body, cancellationToken);
     }
 
-    // Same scoping as PocService.IsAuthorizedAsync (Admin, or the Line Manager /
-    // Practice Lead of the Person the request is about) — spec Section 8.
-    private async Task<bool> IsAuthorizedAsync(
-        Person person,
-        Guid callerId,
-        bool callerIsAdmin,
-        bool callerIsPracticeLead,
-        bool callerIsLineManager,
-        CancellationToken cancellationToken)
-    {
-        if (callerIsAdmin)
-        {
-            return true;
-        }
-
-        if (callerIsLineManager && person.LineManagerId == callerId)
-        {
-            return true;
-        }
-
-        if (callerIsPracticeLead &&
-            await db.Practices.AnyAsync(p => p.Id == person.PracticeId && p.PracticeLeadId == callerId, cancellationToken))
-        {
-            return true;
-        }
-
-        return false;
-    }
 }

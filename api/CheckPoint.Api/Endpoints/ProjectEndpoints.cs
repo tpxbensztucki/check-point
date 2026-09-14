@@ -78,5 +78,29 @@ public static class ProjectEndpoints
                 _ => Results.NotFound(result.Error),
             };
         });
+
+        // Filtered-list visibility (spec Section 8, CBLT-238), not a plain role
+        // check, so this needs its own group requiring only authentication —
+        // same reasoning as personProjectsGroup above.
+        var pocPatternsGroup = app.MapGroup("/projects/{projectId:guid}").RequireAuthorization();
+
+        pocPatternsGroup.MapGet("/poc-response-patterns", async (
+            Guid projectId, ClaimsPrincipal caller, PocResponseHistoryService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetProjectPocPatternsAsync(
+                projectId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                ProjectPocPatternsStatus.Success => Results.Ok(result.Entries),
+                ProjectPocPatternsStatus.ProjectNotFound => Results.NotFound(result.Error),
+                _ => Results.Problem(),
+            };
+        });
     }
 }

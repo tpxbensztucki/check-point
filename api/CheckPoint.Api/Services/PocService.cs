@@ -182,25 +182,9 @@ public partial class PocService(CheckPointDbContext db)
         bool callerIsLineManager,
         CancellationToken cancellationToken)
     {
-        if (callerIsAdmin)
-        {
-            return true;
-        }
-
         var person = await db.People.SingleAsync(p => p.Id == membership.PersonId, cancellationToken);
-
-        if (callerIsLineManager && person.LineManagerId == callerId)
-        {
-            return true;
-        }
-
-        if (callerIsPracticeLead &&
-            await db.Practices.AnyAsync(p => p.Id == person.PracticeId && p.PracticeLeadId == callerId, cancellationToken))
-        {
-            return true;
-        }
-
-        return false;
+        return await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+            db, person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken);
     }
 
     private async Task<ProjectMembershipPocsResponse> BuildResponseAsync(

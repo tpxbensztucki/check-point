@@ -494,6 +494,34 @@ Milestone 9. No magic-link-style token is needed for this link (unlike the
 guest flow): an LM is a standing system user, so once that page exists it's
 protected by ordinary `[Authorize]`, not a one-time link.
 
+CBLT-238 (`PocResponseHistoryService`) closes out Milestone 7 — tracks
+non-response as a pattern across check-ins, not just the single most recent
+one. `GetPocHistoryAsync` (`GET /pocs/{pocId}/response-history`, single-target
+gate like `PocService`) generalizes CBLT-237's per-(request, POC) status
+computation across every `FeedbackRequest` sharing that POC's
+`ProjectMembershipId`, ordered most-recent-first: a request the POC was never
+actually dispatched to (no `MagicLink` ever issued to them for it — e.g. added
+to the membership after that request fired) is excluded from their history
+entirely rather than counted as anything. Returns both
+`ConsecutiveNoResponseCount` (from the most recent entry backwards, stopping at
+the first non-`NoResponse`) and `TotalNoResponseCount` — no fixed "pattern"
+threshold is invented, since neither the ticket's AC nor the spec defines one;
+the raw counts are returned, same live-computed-not-stored philosophy as
+CBLT-237. `GetProjectPocPatternsAsync` (`GET
+/projects/{projectId}/poc-response-patterns`) is a **filtered list**, not a
+pass/fail gate — it follows `OrgTreeService.GetOrgTreeForViewerAsync`'s exact
+shape (a `visiblePersonIds` union: Admin sees everyone, a Practice Lead sees
+Pocs under People in practices they lead, a Line Manager sees Pocs under
+themselves + direct reports only), since different Pocs on the same Project
+can belong to People the caller can and can't see — an LM with no reports on
+that Project simply gets an empty list back, not `403`.
+
+This ticket also extracted `PersonAuthorizationHelpers.IsAuthorizedForPersonAsync`
+(Admin, or the target Person's own Line Manager, or their Practice's Lead) out
+of `PocService` and `RequestDispatchService`, which had been carrying
+byte-for-byte identical copies of this check — the same "extract once genuinely
+reused a third time" precedent as `PocRoleHelpers.ComputeMissingRoles` (CBLT-225).
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
