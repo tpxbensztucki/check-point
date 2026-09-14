@@ -34,6 +34,11 @@ public static class ProjectEndpoints
             };
         });
 
+        group.MapGet("/", async (ProjectService service) => Results.Ok(await service.GetAllAsync()));
+
+        group.MapGet("/{projectId:guid}/people", async (Guid projectId, ProjectService service) =>
+            Results.Ok(await service.GetMembersAsync(projectId)));
+
         group.MapPost("/", async (CreateProjectRequest request, ProjectService service) =>
         {
             var result = await service.CreateProjectAsync(request.Name);

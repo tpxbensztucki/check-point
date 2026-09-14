@@ -104,7 +104,7 @@ public class PracticePeopleEndpointTests : IAsyncLifetime
         var response = await client.GetAsync($"/practices/{_practiceAId}/people");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>();
+        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>(JsonTestOptions.Value);
         var person = people!.Single(p => p.Id == personId);
         Assert.True(person.IsOrphaned);
     }
@@ -118,7 +118,7 @@ public class PracticePeopleEndpointTests : IAsyncLifetime
         var response = await client.GetAsync($"/practices/{_practiceAId}/people");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>();
+        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>(JsonTestOptions.Value);
         var person = people!.Single(p => p.Id == personId);
         Assert.True(person.IsOrphaned);
         Assert.DoesNotContain(people!, p => p.Id == _practiceBLeadId);
@@ -132,7 +132,7 @@ public class PracticePeopleEndpointTests : IAsyncLifetime
 
         var response = await client.GetAsync($"/practices/{_practiceAId}/people");
 
-        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>();
+        var people = await response.Content.ReadFromJsonAsync<List<PracticePersonResponse>>(JsonTestOptions.Value);
         var person = people!.Single(p => p.Id == personId);
         Assert.False(person.IsOrphaned);
     }

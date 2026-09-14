@@ -85,7 +85,7 @@ public class PersonEndpointsTests : IAsyncLifetime
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal("Jamie Newhire", person!.FullName);
         Assert.Equal(PersonStatus.Employed, person.Status);
         Assert.Equal(_practiceId, person.PracticeId);
@@ -108,7 +108,7 @@ public class PersonEndpointsTests : IAsyncLifetime
             new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, _adminPersonId));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal(_adminPersonId, person!.LineManagerId);
         Assert.Equal(_adminPersonId, person.HeadOfPracticeId);
     }
@@ -141,12 +141,12 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var createResponse = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, null));
-        var created = await createResponse.Content.ReadFromJsonAsync<PersonResponse>();
+        var created = await createResponse.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         var response = await client.GetAsync("/people");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var people = await response.Content.ReadFromJsonAsync<List<PersonListEntry>>();
+        var people = await response.Content.ReadFromJsonAsync<List<PersonListEntry>>(JsonTestOptions.Value);
         var admin = people!.Single(p => p.Id == _adminPersonId);
         Assert.Contains(RoleNames.Admin, admin.Roles);
         Assert.Equal("Software Engineering", admin.PracticeName);
@@ -195,14 +195,14 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
             new UpdatePersonRequest("Jamie Renamed", _practiceId, _adminPersonId, _adminPersonId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal("Jamie Renamed", updated!.FullName);
         Assert.Equal(_adminPersonId, updated.LineManagerId);
         Assert.Equal(_adminPersonId, updated.HeadOfPracticeId);
@@ -214,14 +214,14 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Null(person!.Email);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person.Id}",
             new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
-        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>();
+        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
         Assert.Equal("jamie@example.com", updated!.Email);
     }
 
@@ -231,7 +231,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
@@ -258,7 +258,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
@@ -273,7 +273,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         using var client = CreateClient(_nonAdminPersonId);
         var response = await client.PutAsJsonAsync(
@@ -289,7 +289,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>();
+        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
 
         using var client = CreateClient();
         var response = await client.PutAsJsonAsync(

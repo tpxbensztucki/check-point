@@ -10,6 +10,8 @@ import OutstandingRequestsPage from './pages/OutstandingRequestsPage'
 import DepartmentsPage from './pages/admin/DepartmentsPage'
 import PeoplePage from './pages/admin/PeoplePage'
 import PersonDetailPage from './pages/admin/PersonDetailPage'
+import ProjectDetailPage from './pages/admin/ProjectDetailPage'
+import ProjectsPage from './pages/admin/ProjectsPage'
 import SignInPage from './pages/SignInPage'
 
 function App() {
@@ -29,6 +31,8 @@ function App() {
             <Route path="admin/departments" element={<DepartmentsPage />} />
             <Route path="admin/people" element={<PeoplePage />} />
             <Route path="admin/people/:personId" element={<PersonDetailPage />} />
+            <Route path="admin/projects" element={<ProjectsPage />} />
+            <Route path="admin/projects/:projectId" element={<ProjectDetailPage />} />
           </Route>
         </Route>
       </Routes>

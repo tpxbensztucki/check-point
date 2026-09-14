@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using CheckPoint.Api;
 using CheckPoint.Api.Auth;
 using CheckPoint.Api.Endpoints;
@@ -11,6 +12,21 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+
+// Every enum in every contract (ProjectStatus, PersonStatus,
+// PocResponseStatus, CatchUpStatus, CatchUpTriggerSource, PocRelationship,
+// PocRole, CatchUpOutcomeType, ...) was, without this, silently serialized
+// as its raw underlying integer — the .NET default — even though every
+// frontend TypeScript type across every dashboard/admin screen expects the
+// member's name as a string (e.g. `'Active'`, `'Pending'`). Found while
+// smoke-testing CBLT-307's POC creation form by hand: the backend rejected
+// a real request body sending `"relationship":"Internal"` because it only
+// accepted a number. This fixes both directions at once — request bodies
+// carrying an enum by name, and every existing response that had been
+// silently sending numbers the frontend's string comparisons never matched
+// (e.g. `project.status === 'Active'`, `entry.status === 'Pending'').
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddDbContext<CheckPointDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddSingleton(TimeProvider.System);

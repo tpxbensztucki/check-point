@@ -87,7 +87,7 @@ public class PersonCatchUpHistoryEndpointsTests : IAsyncLifetime
         var response = await client.GetAsync($"/people/{_reportPersonId}/catch-ups");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var history = await response.Content.ReadFromJsonAsync<PersonCatchUpHistoryResponse>();
+        var history = await response.Content.ReadFromJsonAsync<PersonCatchUpHistoryResponse>(JsonTestOptions.Value);
         Assert.Empty(history!.Entries);
     }
 

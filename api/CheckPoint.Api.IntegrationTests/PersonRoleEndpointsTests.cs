@@ -80,7 +80,7 @@ public class PersonRoleEndpointsTests : IAsyncLifetime
             $"/people/{_nonAdminPersonId}/roles", new AssignRoleRequest(RoleNames.LineManager, null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>();
+        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>(JsonTestOptions.Value);
         Assert.Contains(RoleNames.LineManager, body!.Roles);
     }
 
@@ -95,7 +95,7 @@ public class PersonRoleEndpointsTests : IAsyncLifetime
             $"/people/{_nonAdminPersonId}/roles", new AssignRoleRequest(RoleNames.PracticeLead, _practiceId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>();
+        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>(JsonTestOptions.Value);
         Assert.Contains(RoleNames.LineManager, body!.Roles);
         Assert.Contains(RoleNames.PracticeLead, body.Roles);
     }
@@ -159,7 +159,7 @@ public class PersonRoleEndpointsTests : IAsyncLifetime
         var response = await client.DeleteAsync($"/people/{_nonAdminPersonId}/roles/{RoleNames.LineManager}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>();
+        var body = await response.Content.ReadFromJsonAsync<PersonRolesResponse>(JsonTestOptions.Value);
         Assert.DoesNotContain(RoleNames.LineManager, body!.Roles);
         Assert.Contains(RoleNames.PracticeLead, body.Roles);
     }

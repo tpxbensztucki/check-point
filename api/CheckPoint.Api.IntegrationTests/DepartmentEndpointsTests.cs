@@ -78,7 +78,7 @@ public class DepartmentEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync("/departments", new CreateDepartmentRequest("Tech & Data"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var department = await response.Content.ReadFromJsonAsync<DepartmentResponse>();
+        var department = await response.Content.ReadFromJsonAsync<DepartmentResponse>(JsonTestOptions.Value);
         Assert.Equal("Tech & Data", department!.Name);
     }
 
@@ -88,13 +88,13 @@ public class DepartmentEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var departmentResponse = await client.PostAsJsonAsync(
             "/departments", new CreateDepartmentRequest("Tech & Data"));
-        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>();
+        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>(JsonTestOptions.Value);
 
         var response = await client.PostAsJsonAsync(
             $"/departments/{department!.Id}/practices", new CreatePracticeRequest("Software Engineering"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var practice = await response.Content.ReadFromJsonAsync<PracticeResponse>();
+        var practice = await response.Content.ReadFromJsonAsync<PracticeResponse>(JsonTestOptions.Value);
         Assert.Equal("Software Engineering", practice!.Name);
         Assert.Equal(department.Id, practice.DepartmentId);
     }
@@ -116,14 +116,14 @@ public class DepartmentEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var departmentResponse = await client.PostAsJsonAsync(
             "/departments", new CreateDepartmentRequest("Tech & Data"));
-        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>();
+        var department = await departmentResponse.Content.ReadFromJsonAsync<DepartmentResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync(
             $"/departments/{department!.Id}/practices", new CreatePracticeRequest("Software Engineering"));
 
         var response = await client.GetAsync("/departments");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var departments = await response.Content.ReadFromJsonAsync<List<DepartmentWithPracticesResponse>>();
+        var departments = await response.Content.ReadFromJsonAsync<List<DepartmentWithPracticesResponse>>(JsonTestOptions.Value);
         // InitializeAsync already seeds one Department ("Tech & Data" from the
         // shared practice fixture) alongside the one this test creates.
         var created = departments!.Single(d => d.Id == department.Id);

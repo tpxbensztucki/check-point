@@ -227,7 +227,7 @@ public class FeedbackRequestEndpointsTests : IAsyncLifetime
         var response = await admin.GetAsync($"/feedback-requests/{_requestId}/pocs");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<List<PocResponseStatusEntry>>();
+        var body = await response.Content.ReadFromJsonAsync<List<PocResponseStatusEntry>>(JsonTestOptions.Value);
         Assert.Equal(PocResponseStatus.Sent, body!.Single().Status);
     }
 

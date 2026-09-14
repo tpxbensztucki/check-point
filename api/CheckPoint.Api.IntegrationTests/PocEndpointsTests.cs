@@ -107,7 +107,7 @@ public class PocEndpointsTests : IAsyncLifetime
     {
         var response = await client.PostAsJsonAsync(
             PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         return result!.Pocs[^1].Id;
     }
 
@@ -122,7 +122,7 @@ public class PocEndpointsTests : IAsyncLifetime
             new CreatePocRequest("Jamie Corrected", "jamie.new@example.com", PocRelationship.Internal, PocRole.Dm));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         var updated = result!.Pocs.Single(p => p.Id == pocId);
         Assert.Equal("Jamie Corrected", updated.Name);
         Assert.Equal("jamie.new@example.com", updated.Email);
@@ -178,7 +178,7 @@ public class PocEndpointsTests : IAsyncLifetime
         var response = await client.DeleteAsync($"{PocsPath()}/{pocId}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         Assert.Empty(result!.Pocs);
         Assert.Contains(PocRole.Tech, result.MissingStandardRoles);
     }
@@ -198,7 +198,7 @@ public class PocEndpointsTests : IAsyncLifetime
     {
         using var adminClient = CreateClient(_adminPersonId);
         var otherProject = await (await adminClient.PostAsJsonAsync("/projects", new CreateProjectRequest("Second Project")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await adminClient.PostAsJsonAsync(
             $"/projects/{otherProject!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
 
@@ -209,7 +209,8 @@ public class PocEndpointsTests : IAsyncLifetime
 
         await adminClient.DeleteAsync($"{PocsPath()}/{pocIdOnFirstProject}");
 
-        var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(otherProjectPocsPath);
+        var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(
+            otherProjectPocsPath, JsonTestOptions.Value);
         Assert.Single(otherProjectPocs!.Pocs);
     }
 
@@ -234,7 +235,7 @@ public class PocEndpointsTests : IAsyncLifetime
             PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         Assert.Single(result!.Pocs);
         Assert.Equal("Jamie Tech", result.Pocs[0].Name);
     }
@@ -249,7 +250,7 @@ public class PocEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync(
             PocsPath(), new CreatePocRequest("Dana Dm", "dana@example.com", PocRelationship.Internal, PocRole.Dm));
 
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         Assert.Equal(2, result!.Pocs.Count);
         Assert.Equal([PocRole.Other], result.MissingStandardRoles);
     }
@@ -264,7 +265,7 @@ public class PocEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync(
             PocsPath(), new CreatePocRequest("Sam Other", "sam@example.com", PocRelationship.External, PocRole.Other));
 
-        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>();
+        var result = await response.Content.ReadFromJsonAsync<ProjectMembershipPocsResponse>(JsonTestOptions.Value);
         Assert.Empty(result!.MissingStandardRoles);
     }
 
@@ -340,7 +341,7 @@ public class PocEndpointsTests : IAsyncLifetime
     {
         using var adminClient = CreateClient(_adminPersonId);
         var otherProject = await (await adminClient.PostAsJsonAsync("/projects", new CreateProjectRequest("Second Project")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await adminClient.PostAsJsonAsync(
             $"/projects/{otherProject!.Id}/people", new AddPersonToProjectRequest(_targetPersonId));
 
@@ -348,7 +349,7 @@ public class PocEndpointsTests : IAsyncLifetime
             PocsPath(), new CreatePocRequest("Jamie Tech", "jamie@example.com", PocRelationship.Client, PocRole.Tech));
 
         var otherProjectPocs = await adminClient.GetFromJsonAsync<ProjectMembershipPocsResponse>(
-            $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs");
+            $"/projects/{otherProject.Id}/people/{_targetPersonId}/pocs", JsonTestOptions.Value);
 
         Assert.Empty(otherProjectPocs!.Pocs);
     }

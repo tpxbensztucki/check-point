@@ -83,7 +83,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
         var response = await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var project = await response.Content.ReadFromJsonAsync<ProjectResponse>();
+        var project = await response.Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         Assert.Equal("Website Revamp", project!.Name);
         Assert.Equal(ProjectStatus.Active, project.Status);
     }
@@ -93,12 +93,12 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         var response = await client.PostAsync($"/projects/{project!.Id}/complete", null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var completed = await response.Content.ReadFromJsonAsync<ProjectResponse>();
+        var completed = await response.Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         Assert.Equal(ProjectStatus.Completed, completed!.Status);
     }
 
@@ -107,7 +107,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsync($"/projects/{project!.Id}/complete", null);
 
         var response = await client.PostAsync($"/projects/{project.Id}/complete", null);
@@ -130,9 +130,9 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var projectToComplete = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         var otherProject = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project B")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync(
             $"/projects/{projectToComplete!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
         await client.PostAsJsonAsync(
@@ -157,7 +157,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var admin = CreateClient(_adminPersonId);
         var project = await (await admin.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         using var client = CreateClient(_nonAdminPersonId);
         var response = await client.PostAsync($"/projects/{project!.Id}/complete", null);
@@ -170,13 +170,13 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var projectResponse = await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp"));
-        var project = await projectResponse.Content.ReadFromJsonAsync<ProjectResponse>();
+        var project = await projectResponse.Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         var response = await client.PostAsJsonAsync(
             $"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var membership = await response.Content.ReadFromJsonAsync<ProjectMembershipResponse>();
+        var membership = await response.Content.ReadFromJsonAsync<ProjectMembershipResponse>(JsonTestOptions.Value);
         Assert.Equal(project.Id, membership!.ProjectId);
         Assert.Equal(_employedPersonId, membership.PersonId);
     }
@@ -186,9 +186,9 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var projectA = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project A")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         var projectB = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Project B")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         var responseA = await client.PostAsJsonAsync(
             $"/projects/{projectA!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
@@ -204,7 +204,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         var response = await client.PostAsJsonAsync(
             $"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_leaverPersonId));
@@ -217,7 +217,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync($"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
 
         var response = await client.PostAsJsonAsync(
@@ -242,7 +242,7 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
         await client.PostAsJsonAsync($"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
 
         var response = await client.DeleteAsync($"/projects/{project.Id}/people/{_employedPersonId}");
@@ -261,11 +261,66 @@ public class ProjectEndpointsTests : IAsyncLifetime
     {
         using var client = CreateClient(_adminPersonId);
         var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
-            .Content.ReadFromJsonAsync<ProjectResponse>();
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
 
         var response = await client.DeleteAsync($"/projects/{project!.Id}/people/{_employedPersonId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_SeesEveryProject()
+    {
+        using var client = CreateClient(_adminPersonId);
+        await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp"));
+
+        var response = await client.GetAsync("/projects");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var projects = await response.Content.ReadFromJsonAsync<List<ProjectResponse>>(JsonTestOptions.Value);
+        Assert.Contains(projects!, p => p.Name == "Website Revamp");
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotListProjects()
+    {
+        using var client = CreateClient(_nonAdminPersonId);
+
+        var response = await client.GetAsync("/projects");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_SeesOnlyCurrentlyActiveMembersOfAProject()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var project = await (await client.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
+        await client.PostAsJsonAsync($"/projects/{project!.Id}/people", new AddPersonToProjectRequest(_employedPersonId));
+        await client.PostAsJsonAsync($"/projects/{project.Id}/people", new AddPersonToProjectRequest(_nonAdminPersonId));
+        await client.DeleteAsync($"/projects/{project.Id}/people/{_nonAdminPersonId}");
+
+        var response = await client.GetAsync($"/projects/{project.Id}/people");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<ProjectMembershipSummary>>(JsonTestOptions.Value);
+        Assert.Single(members!);
+        Assert.Equal(_employedPersonId, members![0].PersonId);
+        Assert.Equal("Ely Employed", members[0].PersonName);
+    }
+
+    [Fact]
+    public async Task NonAdmin_CannotListAProjectsMembers()
+    {
+        using var admin = CreateClient(_adminPersonId);
+        var project = await (await admin.PostAsJsonAsync("/projects", new CreateProjectRequest("Website Revamp")))
+            .Content.ReadFromJsonAsync<ProjectResponse>(JsonTestOptions.Value);
+
+        using var client = CreateClient(_nonAdminPersonId);
+        var response = await client.GetAsync($"/projects/{project!.Id}/people");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
