@@ -1,3 +1,4 @@
+using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,43 @@ namespace CheckPoint.Api.Services;
 // Person CRUD operation (spec Section 5). Grows alongside the rest of Milestone 5.
 public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvider, IOptions<GeneralCycleOptions> generalCycleOptions)
 {
+    // The LM-facing flag action itself (spec Section 5.3, CBLT-239) — the
+    // caller-aware wrapper around the pre-existing HandleCheckInFlaggedAsync
+    // hook, which has no authorization concept of its own. Deliberately a
+    // two-way check (Admin OR the Person's own Line Manager), not the shared
+    // three-way PersonAuthorizationHelpers: this ticket's own AC only ever
+    // mentions a Line Manager ("A Line Manager cannot flag feedback for a
+    // Person who is not their report"), unlike CBLT-240's ad-hoc trigger,
+    // which explicitly includes Practice Lead too — same two-way shape as
+    // PersonService.MarkAsLeaverForViewerAsync.
+    public async Task<FlagResult> FlagCheckInAsync(
+        Guid feedbackRequestId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await db.FeedbackRequests
+            .Include(r => r.ProjectMembership).ThenInclude(m => m.Person)
+            .SingleOrDefaultAsync(r => r.Id == feedbackRequestId, cancellationToken);
+        if (request is null)
+        {
+            return FlagResult.RequestNotFound($"No FeedbackRequest found with id {feedbackRequestId}.");
+        }
+
+        var person = request.ProjectMembership.Person;
+        var isLineManagerOfPerson = callerIsLineManager && person.LineManagerId == callerId;
+        if (!callerIsAdmin && !isLineManagerOfPerson)
+        {
+            return FlagResult.Forbidden;
+        }
+
+        await HandleCheckInFlaggedAsync(feedbackRequestId, cancellationToken);
+
+        var catchUp = await db.CatchUps.SingleAsync(c => c.FeedbackRequestId == feedbackRequestId, cancellationToken);
+        return FlagResult.Flagged(new CatchUpResponse(catchUp.Id, catchUp.PersonId, catchUp.FeedbackRequestId, catchUp.Status, catchUp.CreatedAt));
+    }
+
     // FY quarters run Apr-Jun / Jul-Sep / Oct-Dec / Jan-Mar (spec Section 5.2), so
     // boundaries fall on the 1st of these calendar months, in year order.
     private static readonly int[] QuarterStartMonths = [1, 4, 7, 10];

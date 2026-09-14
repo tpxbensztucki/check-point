@@ -322,9 +322,10 @@ that stage. Idempotent per check-in via a does-a-`CatchUp`-already-exist-for-thi
 a *different* check-in for the same Person still gets its own `CatchUp`). `CatchUp`
 doesn't store who the LM/Practice Lead actually are — like `Person.IsOrphaned`,
 that's resolved live via `Person.LineManagerId`/`Practice.PracticeLeadId` at read
-time. Recording a catch-up's outcome (Milestone 8) isn't implemented here — only
-the `Pending` state exists so far. Still not wired to any endpoint, for the same
-reason as CBLT-227/228: the flag action itself doesn't exist yet.
+time. Recording a catch-up's outcome (Milestone 8, CBLT-241) isn't implemented
+here — only the `Pending` state exists so far. Now wired to `POST
+/feedback-requests/{id}/flag` via `FeedbackCycleService.FlagCheckInAsync`
+(CBLT-239, Milestone 8) — see that section below.
 
 Milestone 6 (Guest Feedback Form): the guest landing page (CBLT-231) is done — the
 **first real frontend UI screen** in this project (everything before it was
@@ -521,6 +522,22 @@ This ticket also extracted `PersonAuthorizationHelpers.IsAuthorizedForPersonAsyn
 of `PocService` and `RequestDispatchService`, which had been carrying
 byte-for-byte identical copies of this check — the same "extract once genuinely
 reused a third time" precedent as `PocRoleHelpers.ComputeMissingRoles` (CBLT-225).
+
+Milestone 8 (Ad-hoc Review / Flagging): CBLT-239 (`FeedbackCycleService.FlagCheckInAsync`,
+`POST /feedback-requests/{id}/flag`) is the first ticket to actually wire up
+`HandleCheckInFlaggedAsync` (CBLT-227/230), which had sat dangling with zero
+non-test callers since Milestone 5. `FlagCheckInAsync` is a thin caller-aware
+wrapper: loads the `FeedbackRequest`, authorizes, then calls the existing hook
+unchanged and returns the resulting `CatchUp`. Deliberately a **two-way**
+check (Admin OR the Person's own Line Manager) — same shape as
+`PersonService.MarkAsLeaverForViewerAsync` — rather than the three-way
+`PersonAuthorizationHelpers` every other Milestone 7 endpoint uses: CBLT-239's
+own AC only ever mentions a Line Manager ("A Line Manager cannot flag feedback
+for a Person who is not their report"), unlike CBLT-240's ad-hoc trigger
+(next), which explicitly includes Practice Lead too — a deliberate,
+textually-supported contrast between the two tickets, not an oversight.
+`Contracts/CatchUpContracts.cs` (new) holds `CatchUpResponse` — the first
+contract for `CatchUp` itself, since no endpoint had ever touched it before.
 
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
