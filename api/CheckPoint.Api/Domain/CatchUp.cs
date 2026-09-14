@@ -21,4 +21,10 @@ public class CatchUp
 
     public DateTimeOffset CreatedAt { get; set; }
     public CatchUpStatus Status { get; set; } = CatchUpStatus.Pending;
+
+    // Set together when the outcome is recorded (CBLT-241) — all three stay
+    // null while Status is Pending.
+    public CatchUpOutcomeType? OutcomeType { get; set; }
+    public string? OutcomeNotes { get; set; }
+    public DateTimeOffset? RecordedAt { get; set; }
 }

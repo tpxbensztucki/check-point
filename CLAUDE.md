@@ -564,6 +564,27 @@ An ad-hoc `CatchUp` already pending for a Person never suppresses a later
 4-week check-in's 6-week insert, since the two guards are entirely
 independent of each other.
 
+CBLT-241 (`CatchUpService.RecordOutcomeAsync`, `POST
+/catch-ups/{catchUpId}/outcome`) is the first ticket where "once a `CatchUp`
+already exists" concerns get their own service — distinct enough from
+`FeedbackCycleService`'s flag/ad-hoc-trigger mechanics to warrant a split, same
+reasoning as `RequestDispatchService`/`PocResponseHistoryService` splitting off
+in Milestone 7. `CatchUpOutcomeType` (new enum: `SixWeekCheckInAdded`,
+`NoActionClosed`, `EscalateFurther`, `Other`) plus new `CatchUp.OutcomeNotes`/
+`RecordedAt` fields — the ticket's own "or free-text equivalent" AC is
+satisfied by pairing `Other` with a required `OutcomeNotes`, rather than
+adding unlimited freeform categories. Three-way auth (matching CBLT-240, not
+CBLT-239). Recording an outcome clears `Person.UnderReviewSince` **unless**
+the outcome is `EscalateFurther` — the review isn't actually over yet in that
+case, per the ticket's own AC. Rejects with `AlreadyRecorded` if the
+`CatchUp`'s `Status` isn't still `Pending`, which — combined with
+`TriggerAdHocReviewAsync`'s own "any Pending catch-up" check from CBLT-240 —
+means a Person whose catch-up was just resolved can immediately have a fresh
+one opened by a new flag or ad-hoc trigger, exactly matching this ticket's
+third BDD scenario. `Contracts/CatchUpContracts.cs`'s `CatchUpResponse` grew a
+`From(CatchUp)` static factory once two services needed to build the same
+response shape.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

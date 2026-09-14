@@ -4,8 +4,7 @@ public enum CatchUpStatus
 {
     Pending,
 
-    // Set once its outcome is recorded — see the Record LM-Practice Lead
-    // catch-up outcome story (Milestone 8, not built yet), which will add the
-    // outcome fields alongside this transition.
+    // Set once its outcome is recorded (CBLT-241) — see CatchUp.OutcomeType/
+    // OutcomeNotes/RecordedAt, all set together with this transition.
     Recorded,
 }

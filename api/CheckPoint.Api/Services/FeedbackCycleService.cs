@@ -43,7 +43,7 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
         await HandleCheckInFlaggedAsync(feedbackRequestId, cancellationToken);
 
         var catchUp = await db.CatchUps.SingleAsync(c => c.FeedbackRequestId == feedbackRequestId, cancellationToken);
-        return FlagResult.Flagged(ToResponse(catchUp));
+        return FlagResult.Flagged(CatchUpResponse.From(catchUp));
     }
 
     // FY quarters run Apr-Jun / Jul-Sep / Oct-Dec / Jan-Mar (spec Section 5.2), so
@@ -140,13 +140,13 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
             c => c.PersonId == personId && c.Status == CatchUpStatus.Pending, cancellationToken);
         if (pending is not null)
         {
-            return AdHocReviewResult.Triggered(ToResponse(pending), alreadyPending: true);
+            return AdHocReviewResult.Triggered(CatchUpResponse.From(pending), alreadyPending: true);
         }
 
         var catchUp = CreateCatchUp(person, feedbackRequestId: null);
         await db.SaveChangesAsync(cancellationToken);
 
-        return AdHocReviewResult.Triggered(ToResponse(catchUp), alreadyPending: false);
+        return AdHocReviewResult.Triggered(CatchUpResponse.From(catchUp), alreadyPending: false);
     }
 
     private CatchUp CreateCatchUp(Person person, Guid? feedbackRequestId)
@@ -163,8 +163,6 @@ public class FeedbackCycleService(CheckPointDbContext db, TimeProvider timeProvi
         return catchUp;
     }
 
-    private static CatchUpResponse ToResponse(CatchUp catchUp) =>
-        new(catchUp.Id, catchUp.PersonId, catchUp.FeedbackRequestId, catchUp.Status, catchUp.CreatedAt);
 
     // Called whenever a FeedbackRequest's lifecycle concludes for any reason — a
     // guest submitting it (Milestone 6) or it reaching its No Response expiry

@@ -25,6 +25,7 @@ builder.Services.AddScoped<FeedbackSubmissionService>();
 builder.Services.AddScoped<RequestDispatchService>();
 builder.Services.AddScoped<LmNotificationDispatchService>();
 builder.Services.AddScoped<PocResponseHistoryService>();
+builder.Services.AddScoped<CatchUpService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.Configure<NewStarterCycleOptions>(
     builder.Configuration.GetSection(NewStarterCycleOptions.SectionName));
@@ -111,6 +112,7 @@ app.MapProjectEndpoints();
 app.MapPocEndpoints();
 app.MapMagicLinkEndpoints();
 app.MapFeedbackRequestEndpoints();
+app.MapCatchUpEndpoints();
 
 var summaries = new[]
 {
