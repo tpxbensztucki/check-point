@@ -15,6 +15,8 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
     public DbSet<Poc> Pocs => Set<Poc>();
     public DbSet<FeedbackRequest> FeedbackRequests => Set<FeedbackRequest>();
     public DbSet<CatchUp> CatchUps => Set<CatchUp>();
+    public DbSet<FeedbackSubmission> FeedbackSubmissions => Set<FeedbackSubmission>();
+    public DbSet<LmNotification> LmNotifications => Set<LmNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -77,6 +79,28 @@ public class CheckPointDbContext(DbContextOptions<CheckPointDbContext> options) 
             .HasOne(c => c.Person)
             .WithMany()
             .HasForeignKey(c => c.PersonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // A FeedbackRequest can have at most one submission — enforced here, not
+        // just by service logic, since the magic link's own already-used guard is
+        // the primary defence and this is a second, structural backstop.
+        modelBuilder.Entity<FeedbackSubmission>()
+            .HasIndex(s => s.FeedbackRequestId)
+            .IsUnique();
+
+        modelBuilder.Entity<FeedbackSubmission>()
+            .HasOne(s => s.FeedbackRequest)
+            .WithMany()
+            .HasForeignKey(s => s.FeedbackRequestId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Restrict on the LineManager side (an outbox row must never vanish along
+        // with the manager row); default cascade on FeedbackSubmission, since a
+        // notification is meaningless without the submission that triggered it.
+        modelBuilder.Entity<LmNotification>()
+            .HasOne(n => n.LineManager)
+            .WithMany()
+            .HasForeignKey(n => n.LineManagerId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
