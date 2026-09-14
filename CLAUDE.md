@@ -631,6 +631,33 @@ already fully role-scoped, so this is purely frontend wiring, satisfying the
 ticket's own "no duplicate tree implementation" AC. `OrgTreeNode` recurses
 over `Reports` to render the forest at arbitrary depth.
 
+CBLT-243 (`OutstandingRequestsPage` at `/dashboard/outstanding-requests`,
+`GET /dashboard/outstanding-requests`, `DashboardService`) is the first
+Milestone 9 ticket needing a genuinely new aggregate backend query — nothing
+before this listed outstanding requests across more than one
+Person/POC/Project at a time. `PersonAuthorizationHelpers` gained
+`GetVisiblePersonIdsAsync` — the union-of-visible-Person-ids scoping
+(Admin: no filter; Practice Lead: own practice; Line Manager: self + direct
+reports) had already been duplicated once between `OrgTreeService` and
+`PocResponseHistoryService.GetProjectPocPatternsAsync`; this ticket's own
+need made it a third occurrence, this project's established threshold for
+extracting a shared helper (same reasoning as `PocRoleHelpers`). Both
+existing call sites were refactored onto it in this same PR, mechanically,
+with no behavior change (their own tests still pass unmodified).
+`RequestDispatchService.ComputePocStatus` was made `internal` (from
+`private`) so `DashboardService.GetOutstandingRequestsAsync` reuses the exact
+same live-computed per-(request, POC) status logic
+`RequestDispatchService.GetPocStatusesAsync` already used for a single
+request, batched here across every request the caller can see. "Outstanding"
+means the computed status isn't `Submitted` (`NotYetSent`/`Sent`/`NoResponse`)
+— the ticket's own two example statuses. Grouping "by cycle" (its third AC)
+is a frontend concern: every `OutstandingRequestEntry` already carries
+`Stage`, so `OutstandingRequestsPage` groups client-side rather than adding a
+per-stage backend endpoint, the same "compute/derive, don't pre-slice"
+precedent as `CatchUpResponse.TriggerSource`. The manual reminder action
+reuses the existing `POST /feedback-requests/{id}/pocs/{pocId}/remind`
+(CBLT-236) — first called from the frontend here.
+
 `POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
 one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
 `PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears

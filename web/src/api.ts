@@ -89,6 +89,51 @@ export async function fetchOrgTree(): Promise<OrgPersonNode[]> {
   return (await response.json()) as OrgPersonNode[]
 }
 
+// Mirrors CheckPoint.Api/Contracts/DashboardContracts.cs's OutstandingRequestEntry.
+export type FeedbackRequestStage =
+  | 'NewStarterWeek2'
+  | 'NewStarterWeek4'
+  | 'NewStarterWeek6'
+  | 'NewStarterWeek8'
+  | 'General'
+
+export type PocResponseStatus = 'NotYetSent' | 'Sent' | 'Submitted' | 'NoResponse' | 'Cancelled'
+
+export interface OutstandingRequestEntry {
+  feedbackRequestId: string
+  personId: string
+  personName: string
+  projectId: string
+  projectName: string
+  pocId: string
+  pocName: string
+  stage: FeedbackRequestStage
+  status: PocResponseStatus
+}
+
+// GET /dashboard/outstanding-requests is already role-scoped server-side
+// (Admin: org-wide; Practice Lead: own practice) — grouping "by cycle" is a
+// display concern handled client-side, since every entry already carries
+// Stage (CBLT-243's own third AC).
+export async function fetchOutstandingRequests(): Promise<OutstandingRequestEntry[]> {
+  const response = await authorizedFetch('/dashboard/outstanding-requests')
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as OutstandingRequestEntry[]
+}
+
+// POST /feedback-requests/{id}/pocs/{pocId}/remind (CBLT-236) — already
+// existed, just never called from the frontend before this view needed it.
+export async function sendReminder(feedbackRequestId: string, pocId: string): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/feedback-requests/${encodeURIComponent(feedbackRequestId)}/pocs/${encodeURIComponent(pocId)}/remind`,
+    { method: 'POST' },
+  )
+  return response.ok
+}
+
 export type SubmitFeedbackStatus = 'success' | 'expired' | 'alreadyUsed' | 'notFound' | 'invalid' | 'error'
 
 export interface SubmitFeedbackResult {

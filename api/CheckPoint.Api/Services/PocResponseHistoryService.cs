@@ -62,38 +62,8 @@ public class PocResponseHistoryService(CheckPointDbContext db, TimeProvider time
             return ProjectPocPatternsResult.ProjectNotFound($"No Project found with id {projectId}.");
         }
 
-        HashSet<Guid>? visiblePersonIds = null;
-        if (!callerIsAdmin)
-        {
-            visiblePersonIds = [];
-
-            if (callerIsPracticeLead)
-            {
-                var ledPracticeIds = await db.Practices
-                    .Where(p => p.PracticeLeadId == callerId)
-                    .Select(p => p.Id)
-                    .ToListAsync(cancellationToken);
-
-                if (ledPracticeIds.Count > 0)
-                {
-                    var practicePeopleIds = await db.People
-                        .Where(p => ledPracticeIds.Contains(p.PracticeId))
-                        .Select(p => p.Id)
-                        .ToListAsync(cancellationToken);
-                    visiblePersonIds.UnionWith(practicePeopleIds);
-                }
-            }
-
-            if (callerIsLineManager)
-            {
-                visiblePersonIds.Add(callerId);
-                var reportIds = await db.People
-                    .Where(p => p.LineManagerId == callerId)
-                    .Select(p => p.Id)
-                    .ToListAsync(cancellationToken);
-                visiblePersonIds.UnionWith(reportIds);
-            }
-        }
+        var visiblePersonIds = await PersonAuthorizationHelpers.GetVisiblePersonIdsAsync(
+            db, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken);
 
         var pocsQuery = db.Pocs.Where(p => p.ProjectMembership.ProjectId == projectId);
         if (visiblePersonIds is not null)

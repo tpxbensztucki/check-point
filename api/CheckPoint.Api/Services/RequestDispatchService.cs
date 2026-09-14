@@ -223,7 +223,10 @@ public class RequestDispatchService(
         return PocStatusResult.Success(entries);
     }
 
-    private static PocResponseStatus ComputePocStatus(
+    // Internal (not private) so DashboardService (CBLT-243) can reuse the
+    // exact same live-computed status logic for its org/practice-wide
+    // aggregate view, rather than reimplementing it.
+    internal static PocResponseStatus ComputePocStatus(
         FeedbackRequestStatus requestStatus,
         Guid pocId,
         HashSet<Guid> submittedPocIds,
