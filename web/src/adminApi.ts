@@ -44,3 +44,78 @@ export async function createPractice(departmentId: string, name: string): Promis
   })
   return response.ok
 }
+
+export type PersonStatus = 'Employed' | 'Leaver'
+
+// Mirrors CheckPoint.Api/Contracts/PersonContracts.cs's PersonListEntry.
+export interface PersonListEntry {
+  id: string
+  fullName: string
+  status: PersonStatus
+  practiceId: string
+  practiceName: string
+  lineManagerId: string | null
+  lineManagerName: string | null
+  headOfPracticeId: string | null
+  roles: string[]
+  email: string | null
+}
+
+export interface PersonFormValues {
+  fullName: string
+  practiceId: string
+  lineManagerId: string | null
+  headOfPracticeId: string | null
+  email: string | null
+}
+
+// GET /people (CBLT-306) — the first flat browse view over every Person;
+// also reused as the data source for PersonPicker.
+export async function fetchPeople(): Promise<PersonListEntry[]> {
+  const response = await authorizedFetch('/people')
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as PersonListEntry[]
+}
+
+export async function createPerson(values: PersonFormValues): Promise<boolean> {
+  const response = await authorizedFetch('/people', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  })
+  return response.ok
+}
+
+export async function updatePerson(personId: string, values: PersonFormValues): Promise<boolean> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  })
+  return response.ok
+}
+
+export async function assignRole(personId: string, roleName: string, practiceId?: string): Promise<boolean> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}/roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roleName, practiceId: practiceId ?? null }),
+  })
+  return response.ok
+}
+
+export async function removeRole(personId: string, roleName: string): Promise<boolean> {
+  const response = await authorizedFetch(
+    `/people/${encodeURIComponent(personId)}/roles/${encodeURIComponent(roleName)}`,
+    { method: 'DELETE' },
+  )
+  return response.ok
+}
+
+export async function markAsLeaver(personId: string): Promise<boolean> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}/leaver`, { method: 'POST' })
+  return response.ok
+}

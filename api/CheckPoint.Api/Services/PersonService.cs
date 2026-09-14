@@ -215,6 +215,26 @@ public class PersonService(CheckPointDbContext db)
         return LeaverTransitionResult.MarkedAsLeaver(ToResponse(person));
     }
 
+    // Backs the Admin Console's People screen (CBLT-306) — the first flat
+    // browse view over every Person; every prior read here was either a
+    // create/update result or a single-target lookup. Resolves practice and
+    // line manager names here so the frontend doesn't need a second round
+    // trip per row.
+    public async Task<IReadOnlyList<PersonListEntry>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        await db.People
+            .Select(p => new PersonListEntry(
+                p.Id,
+                p.FullName,
+                p.Status,
+                p.PracticeId,
+                p.Practice.Name,
+                p.LineManagerId,
+                p.LineManager != null ? p.LineManager.FullName : null,
+                p.HeadOfPracticeId,
+                p.Roles.Select(r => r.Name).ToList(),
+                p.Email))
+            .ToListAsync(cancellationToken);
+
     private static PersonResponse ToResponse(Person person) => new(
         person.Id, person.FullName, person.Status, person.PracticeId, person.LineManagerId, person.HeadOfPracticeId, person.Email);
 }

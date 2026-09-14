@@ -713,6 +713,21 @@ signed-in person holds the `Admin` role (a client-side UX nicety — the real
 enforcement stays server-side, unchanged) — CBLT-306/307 will add their own
 links to it.
 
+CBLT-306 (`PeoplePage`/`PersonDetailPage` at `/dashboard/admin/people[/:id]`)
+adds People management. New `GET /people` (`PersonService.GetAllAsync`,
+Admin-only) returns a flat `PersonListEntry` per Person — practice name and
+line manager name resolved server-side (rather than making the frontend do
+a second lookup per row), plus `Roles` and `HeadOfPracticeId` — the latter
+included specifically so editing a Person doesn't silently null it out on
+save (the existing `PUT /people/{id}` takes the full field set, not a
+patch). `PersonPicker` (`web/src/components/PersonPicker.tsx`) is a small
+reusable searchable Person select, mirroring `SignInPage`'s existing
+filter-as-you-type pattern — used here for Line Manager/Head of Practice
+selection, and reused as-is by CBLT-307 for adding a Person to a Project.
+All the actual write actions (create, update, assign/remove role, mark
+Leaver) already existed and are unchanged — this ticket is entirely new
+reads plus frontend wiring.
+
 ### CORS (bug fix, found while testing the dev seed data end-to-end in a browser)
 
 There was no CORS configuration anywhere in the API — the frontend and API have

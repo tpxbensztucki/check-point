@@ -8,6 +8,8 @@ import GuestFeedbackPage from './pages/GuestFeedbackPage'
 import OrgTreePage from './pages/OrgTreePage'
 import OutstandingRequestsPage from './pages/OutstandingRequestsPage'
 import DepartmentsPage from './pages/admin/DepartmentsPage'
+import PeoplePage from './pages/admin/PeoplePage'
+import PersonDetailPage from './pages/admin/PersonDetailPage'
 import SignInPage from './pages/SignInPage'
 
 function App() {
@@ -25,6 +27,8 @@ function App() {
             <Route path="org-tree" element={<OrgTreePage />} />
             <Route path="people/:personId/catch-up" element={<CatchUpOutcomePage />} />
             <Route path="admin/departments" element={<DepartmentsPage />} />
+            <Route path="admin/people" element={<PeoplePage />} />
+            <Route path="admin/people/:personId" element={<PersonDetailPage />} />
           </Route>
         </Route>
       </Routes>
