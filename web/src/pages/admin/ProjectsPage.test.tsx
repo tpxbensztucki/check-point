@@ -99,4 +99,53 @@ describe('ProjectsPage', () => {
     const link = await screen.findByText('Website Revamp')
     expect(link.closest('a')).toHaveAttribute('href', '/dashboard/admin/projects/proj-1')
   })
+
+  // CBLT-325 — pagination.
+  it('paginates the list and navigates between pages', async () => {
+    const user = userEvent.setup()
+    const projects: Project[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `proj-${i}`,
+      name: `Project ${String(i).padStart(2, '0')}`,
+      status: 'Active',
+    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(projects), { status: 200 })) as unknown as typeof fetch,
+    )
+    renderPage()
+
+    await screen.findByText('Project 00')
+    expect(screen.getAllByText(/^Project \d\d$/)).toHaveLength(25)
+    expect(screen.getByText(/page 1 of 2/i)).toBeInTheDocument()
+    expect(screen.queryByText('Project 25')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^next$/i }))
+
+    expect(await screen.findByText('Project 25')).toBeInTheDocument()
+    expect(screen.getAllByText(/^Project \d\d$/)).toHaveLength(5)
+  })
+
+  it('resets to page 1 when a filter is applied', async () => {
+    const user = userEvent.setup()
+    const projects: Project[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `proj-${i}`,
+      name: `Project ${String(i).padStart(2, '0')}`,
+      status: 'Active',
+    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(projects), { status: 200 })) as unknown as typeof fetch,
+    )
+    renderPage()
+
+    await screen.findByText('Project 00')
+    await user.click(screen.getByRole('button', { name: /^next$/i }))
+    await screen.findByText('Project 25')
+
+    await user.type(screen.getByLabelText(/^search$/i), 'Project 0')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    expect(await screen.findByText('Project 00')).toBeInTheDocument()
+    expect(screen.queryByText(/page \d of \d/i)).not.toBeInTheDocument()
+  })
 })
