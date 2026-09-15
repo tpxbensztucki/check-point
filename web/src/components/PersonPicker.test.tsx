@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../auth/currentPerson'
+import { renderAsUser, resetFetchStub, stubFetch } from '../testUtils'
 import type { PersonListEntry } from '../adminApi'
 import PersonPicker from './PersonPicker'
 
@@ -34,21 +34,14 @@ const PEOPLE: PersonListEntry[] = [
 
 describe('PersonPicker', () => {
   beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify(PEOPLE), { status: 200 })) as unknown as typeof fetch,
-    )
+    stubFetch(async () => new Response(JSON.stringify(PEOPLE), { status: 200 }))
   })
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('filters matches as the search text changes', async () => {
     const user = userEvent.setup()
-    render(<PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} />)
+    renderAsUser(<PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} />)
 
     await user.type(screen.getByLabelText(/pick someone/i), 'riley')
 
@@ -58,7 +51,9 @@ describe('PersonPicker', () => {
 
   it('excludes the given person id from results even when the search text matches them', async () => {
     const user = userEvent.setup()
-    render(<PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} excludePersonId="p1" />)
+    renderAsUser(
+      <PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} excludePersonId="p1" />,
+    )
 
     await user.type(screen.getByLabelText(/pick someone/i), 'ada')
 
@@ -69,7 +64,7 @@ describe('PersonPicker', () => {
   it('selecting a person calls onChange and shows their name', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<PersonPicker id="picker" label="Pick someone" value={null} onChange={onChange} />)
+    renderAsUser(<PersonPicker id="picker" label="Pick someone" value={null} onChange={onChange} />)
 
     await user.type(screen.getByLabelText(/pick someone/i), 'riley')
     await user.click(await screen.findByText('Riley Report'))
@@ -80,7 +75,7 @@ describe('PersonPicker', () => {
   it('clearing a selection calls onChange with null', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<PersonPicker id="picker" label="Pick someone" value="p2" onChange={onChange} />)
+    renderAsUser(<PersonPicker id="picker" label="Pick someone" value="p2" onChange={onChange} />)
 
     await screen.findByRole('button', { name: /clear/i })
     await user.click(screen.getByRole('button', { name: /clear/i }))

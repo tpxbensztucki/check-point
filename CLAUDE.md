@@ -37,10 +37,7 @@ its title.
 - **Frontend:** React + TypeScript + Tailwind CSS (via Vite) — `web/`
 - **Database:** PostgreSQL via EF Core (`api/CheckPoint.Api/CheckPointDbContext.cs`),
   auto-applying pending migrations on API startup. Domain entities live in
-  `api/CheckPoint.Api/Domain/` — `Person`/`Role` (many-to-many, Milestone 2) and
-  `Department`/`Practice`/`Person` org fields, including `Practice.PracticeLeadId`
-  (Milestone 3), `Project`/`ProjectMembership`/`Poc` (Milestone 4), and
-  `FeedbackRequest` (Milestone 5).
+  `api/CheckPoint.Api/Domain/`.
 - **API structure — standing pattern for every feature area**: `Endpoints/` holds
   only routing (`MapGroup`/`RequireAuthorization` wiring, thin lambdas that bind a
   request, call one service method, and map the result to an `IResult`); request/
@@ -52,15 +49,18 @@ its title.
   original precedent, or `PersonService`/`PersonResults.cs` for a fuller example).
   No `CheckPointDbContext` is injected directly into an endpoint lambda. This was
   introduced in CBLT-281 after `DepartmentEndpoints.cs`/`PersonEndpoints.cs` had
-  accumulated real business logic inline across CBLT-214–219; apply it from the
-  start for new endpoint groups rather than extracting it later. Deliberately not
-  in scope: a repository/interface abstraction over `CheckPointDbContext` — it
-  wouldn't add real unit-testability here (rules still need the database via EF
-  either way) and would be premature.
+  accumulated real business logic inline; apply it from the start for new endpoint
+  groups rather than extracting it later. Deliberately not in scope: a repository/
+  interface abstraction over `CheckPointDbContext` — it wouldn't add real unit-
+  testability here (rules still need the database via EF either way) and would be
+  premature.
+- **Extraction convention:** shared logic is pulled into a helper (e.g.
+  `Services/PersonAuthorizationHelpers.cs`, `Domain/PocRoleHelpers.cs`) once it's
+  about to be duplicated a *third* time, not the second — see the "Current state"
+  notes below for the specific precedents. Apply the same threshold to new code.
 - **Hosting:** Azure Container Apps — **on hold**: provisioning (CBLT-205/206) is
   deferred until Azure access is available. Everything else in Milestone 1 that
-  doesn't need Azure (containerisation, Docker Compose, later CI build/test) is not
-  blocked by this.
+  doesn't need Azure is not blocked by this.
 - **Local dev:** `docker compose up --build` runs Postgres, API, and frontend
   together — see the root README.
 
@@ -84,26 +84,12 @@ docker-compose.yml              Full local stack: db + api + web
 
 ## Running locally
 
-Prefer `docker compose up --build` from the repo root (see README) — it needs only
-Docker, no local SDK/Node install. For running pieces individually:
-
-```bash
-# Backend — with a local SDK
-cd api/CheckPoint.Api
-dotnet run
-
-# Backend — via Docker, no local SDK needed
-docker run --rm -v "$(pwd)/api":/src -w /src/CheckPoint.Api mcr.microsoft.com/dotnet/sdk:10.0 dotnet run
-
-# Frontend
-cd web
-npm install
-npm run dev
-```
-
-Environment variable names are kept identical between local Docker Compose and the
-(future) Azure deployment — `ConnectionStrings__Default` for the API, `API_BASE_URL`
-for the frontend — so config is copy-paste-compatible between environments.
+Prefer `docker compose up --build` from the repo root (see README) — needs only
+Docker, no local SDK/Node install. See the README for running the API, frontend, or
+`dotnet test` individually without it. Environment variable names are kept identical
+between local Docker Compose and the (future) Azure deployment —
+`ConnectionStrings__Default` for the API, `API_BASE_URL` for the frontend — so config
+is copy-paste-compatible between environments.
 
 ## Testing
 
@@ -117,16 +103,16 @@ for the frontend — so config is copy-paste-compatible between environments.
   Core migrations, or a full HTTP round-trip belongs here, not in the unit test
   project. Run with: `dotnet test api/CheckPoint.Api.IntegrationTests`
 - **Frontend unit tests** — colocated with the component/module they cover as
-  `*.test.tsx` / `*.test.ts` next to the source file (e.g. `src/App.test.tsx` next to
-  `src/App.tsx`). Uses Vitest + React Testing Library. Run with: `npm test` (in `web/`).
-  No HTTP-mocking library (e.g. MSW) is set up — network calls are mocked directly
-  with `vi.stubGlobal('fetch', vi.fn(...))` (see `GuestFeedbackPage.test.tsx`),
+  `*.test.tsx` / `*.test.ts` next to the source file. Uses Vitest + React Testing
+  Library. Run with: `npm test` (in `web/`). No HTTP-mocking library (e.g. MSW) is
+  set up — network calls are mocked directly with `vi.stubGlobal('fetch', vi.fn(...))`,
   `vi.unstubAllGlobals()` in an `afterEach`/`beforeEach` to reset between tests.
 - Both `dotnet test` commands need a local .NET SDK, or run them via the
   `mcr.microsoft.com/dotnet/sdk:10.0` container the same way as other `dotnet`
-  commands in this doc (mount the repo root, `-w /src`). The integration tests also
-  need the Docker socket available to whatever runs them (Testcontainers starts and
-  stops the Postgres container itself).
+  commands (mount the repo root, `-w /src`). The integration tests also need the
+  Docker socket available (Testcontainers starts and stops the Postgres container
+  itself).
+
 ## CI
 
 `.github/workflows/ci.yml` runs on every PR and on push to `main`: backend unit
@@ -140,908 +126,579 @@ builds with `push: true`, and triggers the deployment.
 
 ## Current state
 
-Milestone 1 (Infrastructure & Tooling): containerisation (CBLT-203, CBLT-204),
-Docker Compose (CBLT-207), test project scaffolding (CBLT-209), and PR/main CI
-(CBLT-208, partial — see above) are done. Remaining: Azure image push + deploy (the
-rest of CBLT-208) and Azure provisioning (CBLT-205/206), both on hold pending Azure
-access.
-
-Milestone 2 (Roles, Permissions & Auth): the Person↔Role data model (CBLT-210) and
-the magic-link mechanism for guest respondents (CBLT-213 —
-`api/CheckPoint.Api/Services/MagicLinkService.cs`) are done. AD SSO (CBLT-211) is not
-yet implemented, and full RBAC enforcement per the Section 8 permission matrix
-(CBLT-212) is **blocked** — the design spec that would define the actual matrix
-isn't available (see below), and most of the actions it would gate don't exist as
-endpoints yet. The magic-link mechanism is deliberately independent of the
-`FeedbackRequest` entity (which doesn't exist yet — Milestone 5) and of the
-guest-facing form itself (Milestone 6); it only knows an opaque `FeedbackRequestId`.
-
-Milestone 3 (Org & People Management): Department and Practice creation (CBLT-214),
-Person creation (CBLT-215), editing a Person's details/Line Manager (CBLT-216),
-role assignment/removal (CBLT-217), marking a Person as Leaver (CBLT-218),
-cross-practice visibility/orphan detection (CBLT-219), and the scoped org tree
-view (CBLT-220) are done — see "Auth (interim)" below for how "who is calling" is
-resolved ahead of
-real SSO. Everything under `/people` is Admin-only except `POST
-/people/{id}/leaver`, which a Line Manager may also call for their own reports
-(checked manually in the handler against `Person.LineManagerId`, since it isn't a
-plain role check). Cancelling outstanding feedback requests and excluding a Leaver
-from future cycle enrolment are deferred until the `FeedbackRequest` entity and
-cycle engine exist (Milestones 5/6); the transition is deliberately one-way (no
-"un-leaver" action), per CBLT-218's acceptance criteria.
-
-`GET /practices/{id}/people` (Admin, or the Practice Lead of that Practice — same
-manual-check pattern as the Leaver endpoint) lists the People tagged to a Practice
-with a computed `IsOrphaned` flag: true when a Person has no `LineManagerId`, or
-their Line Manager's own `PracticeId` differs from theirs. It's computed fresh on
-every read (not a stored column), so it can never go stale when either Person's
-Practice or Line Manager changes later — no separate recalculation step needed.
-
-**CBLT-303 (add-on, prerequisite for CBLT-235):** `Person.Email` is a new
-**nullable** `string?` field, settable via the existing `POST /people` and `PUT
-/people/{id}` endpoints. Deliberately not `required` — no real sign-in exists
-yet to require or verify one, and making it required would have forced every
-existing `new Person { ... }` test call site across the integration suite to
-change for no functional benefit today. It becomes load-bearing once CBLT-211
-(real AD SSO) and CBLT-235 (per-submission LM notification email, Milestone 7)
-exist; until then, a null `Email` just means "nothing to send to yet."
-Since the endpoint filters to one Practice before returning results, a Line
-Manager tagged to a different Practice never appears in another Practice's list,
-even though their report (tagged to that Practice) does, flagged Orphaned.
-
-`GET /org-tree` (any authenticated caller — the three-role scoping happens inside
-`OrgTreeService`, not a group-level policy) returns a forest of `OrgPersonNode`,
-each with nested `Reports`. Visibility is a union of whatever the caller's roles
-grant: Admin sees everyone; Practice Lead sees everyone tagged to a Practice they
-lead; Line Manager sees themselves plus exactly their direct reports (not deeper).
-A Person whose Line Manager falls outside the caller's visible set becomes a root
-in the returned forest rather than being dropped — the same rule
-`GetPracticePeopleForViewerAsync` uses. A caller holding none of the three roles
-gets back an empty list, not a 403. The tree-building code also guards against a
-manager cycle in the data (e.g. two edits leaving A → B → A) to avoid infinite
-recursion. `Person` now carries
-`Status` (defaults to `Employed`), a required `Practice`, and optional
-self-referencing `LineManager`/`HeadOfPractice` links; a new Person is always
-created with no Roles (role assignment is a separate story). `PUT /people/{id}`
-rejects a Person being set as their own Line Manager; recalculating the
-orphaned-person flag on Line Manager change is deferred until that flag exists
-(CBLT-219).
-
-Milestone 4 (Project & POC Management): creating a Project and adding/removing a
-Person (CBLT-221), and completing a Project (CBLT-222), are done, Admin-only.
-`Project` has a `Status` (defaults to `Active`); `Person`<->`Project` is an
-explicit join entity, `ProjectMembership` (not an implicit many-to-many like
-`Person`/`Role`), because a Person's per-Project feedback cycle (Milestone 5) will
-need somewhere to attach state to a specific Person-Project pairing. `DELETE
-/projects/{id}/people/{personId}` soft-deletes — sets `RemovedAt` rather than
-deleting the row — so a Person's history on a Project survives removal, per this
-story's acceptance criteria. Adding a Leaver to a Project is rejected; adding a
-Person also now schedules their New Starter cycle (CBLT-226, see below).
-`POST /projects/{id}/complete` performs the status transition (rejecting an
-already-Completed Project) and cancels every still-`Scheduled` `FeedbackRequest`
-tied to the Project (CBLT-226); completing a Project never touches the Person's
-own status or their other Projects.
-
-Assigning POCs (CBLT-223) is scoped to one Person's `ProjectMembership` (`Poc`
-entity, cascade-deletes with its membership since it's meaningless without one).
-`POST`/`GET /projects/{id}/people/{personId}/pocs` are callable by Admin, the
-Practice Lead of the target Person's Practice, or the Line Manager of the target
-Person — a three-way manual check in `PocService`, the same pattern as the Leaver
-and Practice-view endpoints. `MissingStandardRoles` (which of Tech/DM/Other have no
-active POC yet) is computed fresh on every read, never stored. `PUT`/`DELETE
-.../pocs/{pocId}` (CBLT-224, same three-way authorization) edit or hard-delete a
-single POC — no "history" requirement exists for POCs the way it does for
-`ProjectMembership`, so removal is a real delete, not a soft one. Cancelling a
-removed POC's outstanding feedback request is still deferred (removing a POC isn't
-the same as completing a Project, and the dispatch job that would need to look
-this up doesn't exist yet, Milestone 7); correcting a POC's email has no effect on
-already-sent magic links since `MagicLink` only ever carries an opaque
-`FeedbackRequestId`, never the POC's email — that acceptance criterion is already
-satisfied structurally, no code needed for it.
-
-`GET /people/{personId}/projects` (CBLT-225) lists every Project a Person is
-currently on, with per-Active-Project `MissingStandardRoles` (`null` for a
-Completed Project, since completeness stops being meaningful there). Visibility
-follows the same role scoping as the org tree (Admin: all; Practice Lead: own
-Practice; Line Manager: own reports) — the same manual-check pattern as Leaver and
-Practice-view, living in `ProjectService.GetProjectsForPersonAsync`. The missing-
-roles computation itself is shared with `PocService` via
-`Domain/PocRoleHelpers.cs` rather than duplicated.
-
-Milestone 5 (Feedback Cycle Engine): New Starter cycle scheduling (CBLT-226) is
-done. The `FeedbackRequest` entity now exists — one row per scheduled request,
-carrying `ProjectMembershipId`, `ScheduledFor`, and a `Status`
-(`Scheduled`/`Sent`/`Cancelled`) — but it deliberately carries no snapshot of which
-POCs to send to; the dispatch job (Milestone 7, not built yet) resolves the
-Project's currently assigned POCs at send time, satisfying that acceptance
-criterion by construction. `ProjectService.AddPersonAsync` schedules one
-`FeedbackRequest` per configured interval (default 2/4/8 weeks) relative to the
-Person's own `ProjectMembership.JoinedAt`, not the Project's creation date, so
-staggered starters get staggered schedules. Interval config
-(`NewStarterCycleOptions`, bound from the `NewStarterCycle` configuration section)
-is an interim stand-in for CBLT-252 (Admin Settings: Configure New Starter
-interval schedule) — changing it via config/env var already satisfies "not
-hardcoded," it just isn't editable through the app itself yet; when CBLT-252
-lands, only where the value is read from changes, not `AddPersonAsync`'s logic.
-`ProjectService.CompleteProjectAsync` now also cancels every still-`Scheduled`
-`FeedbackRequest` tied to the Project, closing out that part of CBLT-222's
-originally-deferred scope. `MagicLink.FeedbackRequestId` remains a bare,
-unconstrained `Guid` rather than a real FK to `FeedbackRequest` — that decoupling
-was a deliberate CBLT-213 design choice and isn't revisited here.
-
-`FeedbackRequest` also now carries a `Stage` (`FeedbackRequestStage`:
-`NewStarterWeek2`/`Week4`/`Week6`/`Week8`), separate from `Status` — needed so the
-cycle engine can recognise "the 4-week check-in" reliably rather than inferring it
-from `ScheduledFor` minus `JoinedAt`, which would break under a reconfigured
-interval set. `FeedbackCycleService.HandleCheckInFlaggedAsync` (CBLT-227) is the
-auto-insert-a-6-week-check-in hook: flagging a `NewStarterWeek4` request schedules
-one `NewStarterWeek6` request (idempotent — a second flag is a no-op), flagging
-any other stage does nothing. **Not wired to any endpoint** — the unified flag
-action itself doesn't exist yet (CBLT-239, Milestone 8; CBLT-230 is the ticket that
-will call this hook from it) — so this is tested by calling the service directly,
-same style as `ProjectServiceSchedulingTests`/`MagicLinkServiceTests`.
-
-`ProjectMembership.GeneralCycleEnrolledAt` (CBLT-228, nullable, set once and never
-cleared) marks a membership as having transitioned from the New Starter cycle into
-the General (quarterly) cycle — it's both the idempotency guard and, for CBLT-229
-(FY-quarter scheduling), the anchor date that cycle will count from.
-`FeedbackCycleService.HandleFeedbackRequestCompletedAsync` sets it when the
-`NewStarterWeek8` request (always the last New Starter stage chronologically,
-whether or not a `Week6` was inserted) concludes — unless the Project has since
-Completed or the Person has since become a Leaver, in which case enrolment is
-skipped. Per Person per Project by construction, since it only ever touches the
-one membership tied to the completed request. Like CBLT-227's hook, **not wired to
-any endpoint** — neither trigger (guest submission, Milestone 6; No Response
-expiry, CBLT-237) exists yet — so it's tested by calling the service directly.
-
-`FeedbackCycleService.HandleFeedbackRequestCompletedAsync` (CBLT-229) now
-dispatches by `Stage`: a `NewStarterWeek8` completion enrols into the General
-cycle (CBLT-228) *and* schedules its first `FeedbackRequest.Stage.General`
-request; a `General` completion schedules the next one, continuing every FY
-quarter until the Project completes or the Person becomes a Leaver. FY quarters
-run Apr–Jun/Jul–Sep/Oct–Dec/Jan–Mar (spec Section 5.2), so boundaries are always
-the 1st of Jan/Apr/Jul/Oct. On first enrolment, if the next boundary falls within
-the configured skip threshold (`GeneralCycleOptions.SkipThresholdWeeks`, default
-4, interim stand-in for CBLT-253 exactly like `NewStarterCycleOptions`/CBLT-252)
-of the enrolment moment, that quarter is skipped in favour of the one after.
-Subsequent quarters are anchored to the *previous* request's own `ScheduledFor`
-(always a quarter-start date) rather than "now" processed-at time, so the cadence
-never drifts. A single `FeedbackRequestStage.General` value covers every quarter —
-unlike the New Starter stages, quarters have no distinct identity beyond "the next
-one." Idempotency for both the first and subsequent schedules is a
-does-a-later-request-already-exist check, same shape as CBLT-227's guard.
-
-`FeedbackCycleService.HandleCheckInFlaggedAsync` (CBLT-230) is now the single,
-well-defined "a check-in's feedback was flagged" entry point — the same method
-CBLT-227 introduced, expanded to always set `Person.UnderReviewSince` (orthogonal
-to `Status`: Employed/Leaver is an employment lifecycle, being under review is a
-separate, overlapping flag, spec Section 5.3) and create a pending `CatchUp`
-record, with the New-Starter-4-week-specific 6-week insert layered on top only for
-that stage. Idempotent per check-in via a does-a-`CatchUp`-already-exist-for-this-
-`FeedbackRequestId` check, so a second flag on the same request does nothing (but
-a *different* check-in for the same Person still gets its own `CatchUp`). `CatchUp`
-doesn't store who the LM/Practice Lead actually are — like `Person.IsOrphaned`,
-that's resolved live via `Person.LineManagerId`/`Practice.PracticeLeadId` at read
-time. Recording a catch-up's outcome (Milestone 8, CBLT-241) isn't implemented
-here — only the `Pending` state exists so far. Now wired to `POST
-/feedback-requests/{id}/flag` via `FeedbackCycleService.FlagCheckInAsync`
-(CBLT-239, Milestone 8) — see that section below.
-
-Milestone 6 (Guest Feedback Form): the guest landing page (CBLT-231) is done — the
-**first real frontend UI screen** in this project (everything before it was
-backend-only). `GET /magic-links/{token}` (`MagicLinkEndpoints.cs`) wraps the
-existing `MagicLinkService.ValidateAsync` and is deliberately unauthenticated — no
-`RequireAuthorization` at all — since a guest never signs in (spec Section 9); it
-maps `Valid`→200, `NotFound`→404, `Expired`→410, `AlreadyUsed`→409. `react-router-
-dom` was added as the frontend's first routing dependency (none existed before);
-`web/src/App.tsx` is now the route table, `web/src/pages/` holds one component per
-screen, and `web/src/api.ts` is the fetch-wrapper convention for calling the
-backend (no HTTP client library added — plain `fetch` plus `getApiBaseUrl()`).
-`GuestFeedbackPage` renders one of: loading, expired, already-submitted, invalid-
-link, or (once the link is `Valid`) the feedback form. `web/nginx.conf` already had
-a SPA fallback (`try_files $uri /index.html`) from the original scaffold, so no
-changes were needed there for client-side routing to work in the container.
-
-`web/src/components/FeedbackForm.tsx` (CBLT-232) is the three-field form itself —
-"What they are doing well" / "What they aren't doing well" / "What they need to
-improve" — all required, each capped at 2000 characters
-(`FEEDBACK_FIELD_MAX_LENGTH`). Deliberately does **not** set an HTML `maxLength` on
-the `<textarea>`s: a guest can type past the limit, see the counter turn red, and
-get a blocking validation message on submit, rather than being silently stopped
-mid-keystroke — this matches the ticket's own BDD scenario (entering 2050
-characters, then being blocked) and gives clearer feedback than a hard cap. The
-Submit button is never `disabled`; invalid submission attempts show inline
-`role="alert"` errors and `aria-invalid`/`aria-describedby` on the offending
-field(s) instead, since a silently-disabled button is a common accessibility
-pitfall (spec Section 14) — screen-reader/keyboard users get no explanation for
-why nothing happens. `FeedbackForm` only validates and calls its `onSubmit` prop; `GuestFeedbackPage`
-wires the real submission call (see below). Added `@testing-library/user-event`
-as a new dev dependency for its tests (real typing/click/blur simulation, not
-just `fireEvent`).
-
-`POST /magic-links/{token}/submission` (CBLT-233, `FeedbackSubmissionService`)
-handles a completed submission. Content validation (required + 2000-char limit,
-mirroring `FeedbackForm`'s own rules since the API is public and can't trust
-client-side validation alone) happens *before* the magic link is touched, so a
-rejected submission never burns the guest's one chance to submit — only once
-validation passes does the service call `MagicLinkService.LoadAndCheckAsync`
-(now `internal`, not `private`, precisely so this service can validate a token
-and then mutate the same tracked `MagicLink` itself as part of one
-`SaveChangesAsync`, rather than calling `ConsumeAsync` separately and
-potentially consuming the link before knowing the submission will succeed). One
-`SaveChangesAsync` call marks the `MagicLink` used, inserts the immutable
-`FeedbackSubmission` row, and — if the Person has a `LineManagerId` set —
-inserts an `LmNotification` outbox row. `FeedbackRequest.Status` is deliberately
-left untouched by submission: it tracks the request's own dispatch lifecycle
-(`Scheduled`/`Sent`/`Cancelled`, `Sent` meaning "the request email was
-dispatched" — see CBLT-302 below), not response state, since a request can have
-several currently-assigned POCs each responding independently. There is
-deliberately no endpoint that edits a `FeedbackSubmission`: immutability (spec
-Section 8/10) is enforced by omission, not a guarded field. `LmNotification`
-is a durable outbox, not an actual send: real delivery is the Notifications
-epic's dispatch job (not yet built), but because the row is written in the same
-transaction as the submission it satisfies the ticket's "must not be silently
-dropped, even if the mechanism temporarily fails" requirement by construction —
-there's nothing to lose since nothing is attempted synchronously yet. No line
-manager assigned is treated as "nobody to notify" rather than a dropped
-notification. The frontend's `submitFeedback` (`web/src/api.ts`) posts the
-guest's `FeedbackFormValues` as JSON to this endpoint; `GuestFeedbackPage` shows
-the "Thank you" confirmation on success, or an inline `role="alert"` message
-(keeping the form on screen) for an expired/already-used link or any other
-failure, guarding against a double-submit firing a second request while the
-first is still in flight.
-
-**CBLT-302 (bug fix, found while scoping CBLT-234):** `MagicLink` and
-`FeedbackSubmission` were both missing a `PocId` reference — CBLT-233's own AC
-required saving feedback "against the correct request, POC, Person, and
-Project," but no POC-to-magic-link relationship existed at all, since CBLT-231
-and CBLT-233's tests only ever issued links against an arbitrary
-`FeedbackRequestId`. This became unavoidable once CBLT-234 (per-POC email
-dispatch) needed to issue one magic link per currently-assigned POC, not one
-per request — and CBLT-237's own AC confirms outcomes are tracked **per POC**,
-not aggregated onto the request as a whole (`"a request with 3 POCs can have a
-mix of Submitted and No Response outcomes"`). Fixed by adding `PocId` (real FK
-to `Poc`) to both `MagicLink` and `FeedbackSubmission`, and changing
-`FeedbackSubmissions`' unique index from `FeedbackRequestId` alone to
-`(FeedbackRequestId, PocId)`, so each POC can submit independently for the same
-request but not twice. `MagicLinkService.IssueAsync` now takes a `pocId`
-parameter. Whether a given POC has responded is always answered by whether a
-`FeedbackSubmission` row exists for that `(FeedbackRequestId, PocId)` pair —
-never stored as a status on `FeedbackRequest` itself.
-
-Milestone 7 (Notifications & Response Tracking): CBLT-234 (`RequestDispatchService`)
-sends the POC feedback request email containing a magic link. One `MagicLink` (and
-one email) per currently-assigned POC on the request's `ProjectMembership` — each
-scoped to that POC and that request only, per CBLT-302's fix. Entry points:
-`DispatchDueAutomaticRequestsAsync` (the Automatic-mode driver, polled every minute
-by `RequestDispatchBackgroundService`, an `IHostedService`), `DispatchManuallyAsync`
-(the authorised-user trigger, `POST /feedback-requests/{id}/dispatch`, same
-Admin-or-LM-or-PracticeLead scoping as `PocService`), and `SendReminderAsync`
-(CBLT-236, below). The global mode is
-`RequestDispatchOptions.Mode` (`Automatic`/`Manual`, config-bound, interim until
-CBLT-254's Admin Settings toggle exists) — the background job only sends when
-`Automatic`; the manual endpoint works regardless of mode, since an authorised user
-can always force a send. `RequestDispatchBackgroundService` is **not registered in
-the "Testing" environment** (see `Program.cs`): it runs on real wall-clock time via
-`Task.Delay`, which would otherwise fire unpredictably against tests that advance a
-`FakeTimeProvider` instead of real time.
-
-Actual email sending is behind a new `IEmailSender` interface — `SmtpEmailSender` is
-the real implementation (BCL `SmtpClient`, configured via `SmtpOptions`; no SMTP
-server exists in any environment this project has run in yet, so `SmtpOptions.Host`
-defaults empty and a misconfigured deployment fails loudly rather than pretending to
-send). Tests substitute a `RecordingEmailSender` fake (same reasoning as
-`FakeTimeProvider`). The frontend URL embedded in each email comes from a new
-`FrontendOptions.BaseUrl` (config-bound, plain infra — not tied to any Admin Settings
-ticket), wired via `Frontend__BaseUrl` in `docker-compose.yml`.
-
-A due request whose `ProjectMembership.RemovedAt` is set (the person left the
-project after the request was scheduled) is marked `Cancelled` instead of sent,
-mirroring `ProjectService.CompleteProjectAsync`'s existing cancel-on-completion
-behaviour for the narrower per-Person case. A due request with zero currently
-assigned POCs is left `Scheduled` and retried on the next automatic pass rather
-than being marked `Sent` with nothing actually sent.
-
-CBLT-236 (`RequestDispatchService.SendReminderAsync`, `POST
-/feedback-requests/{id}/pocs/{pocId}/remind`) resends to one non-responding POC —
-a plain resend, not a new `FeedbackRequest`: issues a fresh `MagicLink` (fresh
-7-day expiry) and invalidates whatever prior, still-usable link(s) existed for
-that exact `(FeedbackRequest, Poc)` pair, so the old one stops working. This
-needed a new `MagicLink.InvalidatedAt` field, distinct from `UsedAt` — a
-superseded link was never used to submit, it was just replaced. `MagicLinkService`
-and `FeedbackSubmissionService` both gained a `Superseded` status (mapped to `410
-Gone`, same as `Expired`, on both the link-view and submission endpoints) so a
-guest who still has an old link sees "replaced by a more recent one" rather than
-the misleading "already submitted." Rejected with `NotYetDispatched` if the
-request isn't `Sent` yet, or `AlreadySubmitted` if a `FeedbackSubmission` already
-exists for that POC — matching CBLT-237's per-POC (not per-request) response
-model. Scoped down: the two UI surfaces the ticket names (a Person's detail view,
-the Admin/Practice Lead Dashboard) don't exist yet (Milestone 9) — this ships the
-backend capability (the endpoint) only; wiring a reminder button into either view
-is for whoever builds those screens.
-
-CBLT-237 (`RequestDispatchService.GetPocStatusesAsync`, `GET
-/feedback-requests/{id}/pocs`) reports each currently-assigned POC's outcome for a
-request — `NotYetSent` / `Sent` / `Submitted` / `NoResponse` / `Cancelled` — never
-a single status on the request as a whole, since different POCs on the same
-request can be in different states (its own AC gives the example: one Submitted,
-two No Response). Deliberately **computed live** on every call rather than a
-stored flag flipped by a background job: given the current time, whether a
-`FeedbackSubmission` exists for that `(FeedbackRequestId, PocId)` pair, and the
-most recent non-invalidated `MagicLink` for that pair, the correct status follows
-directly with no risk of drifting out of sync with "now" the way a periodically-
-run job could (and no new job/infra needed). A POC added to the project after the
-request was already dispatched (no link was ever issued to them) reads as
-`NotYetSent`, same as before dispatch.
-
-`Contracts/FeedbackRequestContracts.cs` holds the new `PocResponseStatus` enum and
-`PocResponseStatusEntry` response record — the first contracts file for
-`FeedbackRequest`-shaped responses (previously `FeedbackRequest` had no view
-endpoint of its own, only the dispatch/reminder actions).
-
-CBLT-235 (`LmNotificationDispatchService.DispatchPendingNotificationsAsync`,
-polled every minute by `LmNotificationDispatchBackgroundService` — same
-not-registered-in-`"Testing"` pattern as `RequestDispatchBackgroundService`)
-delivers the `LmNotification` outbox CBLT-233 already queues one row per
-submission for, never batched — three respondents submitting at different times
-means three separate emails to the LM, not one combined notification, per this
-ticket's own AC. A pending row whose `LineManager.Email` is null is skipped
-(left pending, retried next pass) rather than treated as a failure — same
-reasoning as "no Line Manager assigned" elsewhere. The email contains a link,
-never the feedback content itself (spec Section 7's sensitivity requirement);
-the link points at `{FrontendOptions.BaseUrl}/people/{personId}`, a route that
-**does not exist in the frontend yet** — no Person-detail view is built until
-Milestone 9. No magic-link-style token is needed for this link (unlike the
-guest flow): an LM is a standing system user, so once that page exists it's
-protected by ordinary `[Authorize]`, not a one-time link.
-
-CBLT-238 (`PocResponseHistoryService`) closes out Milestone 7 — tracks
-non-response as a pattern across check-ins, not just the single most recent
-one. `GetPocHistoryAsync` (`GET /pocs/{pocId}/response-history`, single-target
-gate like `PocService`) generalizes CBLT-237's per-(request, POC) status
-computation across every `FeedbackRequest` sharing that POC's
-`ProjectMembershipId`, ordered most-recent-first: a request the POC was never
-actually dispatched to (no `MagicLink` ever issued to them for it — e.g. added
-to the membership after that request fired) is excluded from their history
-entirely rather than counted as anything. Returns both
-`ConsecutiveNoResponseCount` (from the most recent entry backwards, stopping at
-the first non-`NoResponse`) and `TotalNoResponseCount` — no fixed "pattern"
-threshold is invented, since neither the ticket's AC nor the spec defines one;
-the raw counts are returned, same live-computed-not-stored philosophy as
-CBLT-237. `GetProjectPocPatternsAsync` (`GET
-/projects/{projectId}/poc-response-patterns`) is a **filtered list**, not a
-pass/fail gate — it follows `OrgTreeService.GetOrgTreeForViewerAsync`'s exact
-shape (a `visiblePersonIds` union: Admin sees everyone, a Practice Lead sees
-Pocs under People in practices they lead, a Line Manager sees Pocs under
-themselves + direct reports only), since different Pocs on the same Project
-can belong to People the caller can and can't see — an LM with no reports on
-that Project simply gets an empty list back, not `403`.
-
-This ticket also extracted `PersonAuthorizationHelpers.IsAuthorizedForPersonAsync`
-(Admin, or the target Person's own Line Manager, or their Practice's Lead) out
-of `PocService` and `RequestDispatchService`, which had been carrying
-byte-for-byte identical copies of this check — the same "extract once genuinely
-reused a third time" precedent as `PocRoleHelpers.ComputeMissingRoles` (CBLT-225).
-
-Milestone 8 (Ad-hoc Review / Flagging): CBLT-239 (`FeedbackCycleService.FlagCheckInAsync`,
-`POST /feedback-requests/{id}/flag`) is the first ticket to actually wire up
-`HandleCheckInFlaggedAsync` (CBLT-227/230), which had sat dangling with zero
-non-test callers since Milestone 5. `FlagCheckInAsync` is a thin caller-aware
-wrapper: loads the `FeedbackRequest`, authorizes, then calls the existing hook
-unchanged and returns the resulting `CatchUp`. Deliberately a **two-way**
-check (Admin OR the Person's own Line Manager) — same shape as
-`PersonService.MarkAsLeaverForViewerAsync` — rather than the three-way
-`PersonAuthorizationHelpers` every other Milestone 7 endpoint uses: CBLT-239's
-own AC only ever mentions a Line Manager ("A Line Manager cannot flag feedback
-for a Person who is not their report"), unlike CBLT-240's ad-hoc trigger
-(next), which explicitly includes Practice Lead too — a deliberate,
-textually-supported contrast between the two tickets, not an oversight.
-`Contracts/CatchUpContracts.cs` (new) holds `CatchUpResponse` — the first
-contract for `CatchUp` itself, since no endpoint had ever touched it before.
-
-CBLT-240 (`FeedbackCycleService.TriggerAdHocReviewAsync`, `POST
-/people/{personId}/ad-hoc-review`) lets a Practice Lead or Line Manager start a
-review at any time, independent of a check-in — same `CreateCatchUp`
-mechanism as flagging (extracted as a small private helper: set
-`UnderReviewSince`, add a `CatchUp`), but with `FeedbackRequestId` left `null`
-and never triggering a 6-week insert. Three-way auth via
-`PersonAuthorizationHelpers`, unlike CBLT-239's two-way check, since this
-ticket's own AC explicitly names both roles. `CatchUp.FeedbackRequestId`
-became **nullable** for this (a real schema change — Milestone 5 only ever
-anticipated check-in-triggered catch-ups; no endpoint had touched `CatchUp` at
-all before CBLT-239, so this isn't a fix to shipped behaviour, just anticipated
-evolution). Guards independently of `HandleCheckInFlaggedAsync`'s own
-per-`FeedbackRequestId` idempotency check: `TriggerAdHocReviewAsync` looks for
-**any** `Pending` `CatchUp` for the Person (from either path) and surfaces it
-instead of creating a duplicate if one exists — but this is *this method's
-own* rule, not a change to flagging's behaviour. **Important correction from
-the original Milestone-5-era assumption**: flagging two *different* check-ins
-for the same Person still creates two separate `CatchUp` rows (proven by an
-already-passing test, `CatchUpHookTests.FlaggingDifferentCheckInsForTheSamePerson_CreatesASeparateCatchUpEach`)
-— `HandleCheckInFlaggedAsync` was deliberately left untouched rather than
-widening its guard to match the ad-hoc path's, which would have broken that.
-An ad-hoc `CatchUp` already pending for a Person never suppresses a later
-4-week check-in's 6-week insert, since the two guards are entirely
-independent of each other.
-
-CBLT-241 (`CatchUpService.RecordOutcomeAsync`, `POST
-/catch-ups/{catchUpId}/outcome`) is the first ticket where "once a `CatchUp`
-already exists" concerns get their own service — distinct enough from
-`FeedbackCycleService`'s flag/ad-hoc-trigger mechanics to warrant a split, same
-reasoning as `RequestDispatchService`/`PocResponseHistoryService` splitting off
-in Milestone 7. `CatchUpOutcomeType` (new enum: `SixWeekCheckInAdded`,
-`NoActionClosed`, `EscalateFurther`, `Other`) plus new `CatchUp.OutcomeNotes`/
-`RecordedAt` fields — the ticket's own "or free-text equivalent" AC is
-satisfied by pairing `Other` with a required `OutcomeNotes`, rather than
-adding unlimited freeform categories. Three-way auth (matching CBLT-240, not
-CBLT-239). Recording an outcome clears `Person.UnderReviewSince` **unless**
-the outcome is `EscalateFurther` — the review isn't actually over yet in that
-case, per the ticket's own AC. Rejects with `AlreadyRecorded` if the
-`CatchUp`'s `Status` isn't still `Pending`, which — combined with
-`TriggerAdHocReviewAsync`'s own "any Pending catch-up" check from CBLT-240 —
-means a Person whose catch-up was just resolved can immediately have a fresh
-one opened by a new flag or ad-hoc trigger, exactly matching this ticket's
-third BDD scenario. `Contracts/CatchUpContracts.cs`'s `CatchUpResponse` grew a
-`From(CatchUp)` static factory once two services needed to build the same
-response shape.
-
-CBLT-242 (`CatchUpService.GetHistoryAsync`, `GET /people/{personId}/catch-ups`)
-closes out Milestone 8 — a Person's full flag/ad-hoc-review/catch-up-outcome
-history in one place, ordered most-recent-first, same three-way scoping and
-"empty list is a normal Success, not an error" precedent as
-`PocResponseHistoryService.GetPocHistoryAsync` (Milestone 7). Returns
-`PersonCatchUpHistoryResponse` — `UnderReviewSince` surfaced at the top level
-(not just inferred from the entries) so a currently-active review is
-trivially distinguishable from resolved history, per the ticket's own AC.
-`CatchUpResponse` gained a computed `TriggerSource` (`CheckIn`/`AdHoc`, derived
-from whether `FeedbackRequestId` is set) so consumers don't have to re-derive
-it themselves — the ticket's own AC calls out "trigger source" as a field the
-history view must show.
-
-Milestone 9 (Admin/Practice Lead Dashboard): **CBLT-304 (prerequisite, not a
-spec ticket)** builds the dashboard shell and a dev-only sign-in stand-in —
-none of CBLT-243/244/245 could land without somewhere to attach their
-sections, and the frontend had no concept of "who is signed in" at all before
-this (everything before it was either backend-only or the unauthenticated
-guest flow). New `GET /dev/people` (`Endpoints/DevEndpoints.cs`,
-`DevPersonDirectoryService`) is deliberately unauthenticated — it exists so a
-sign-in picker has something to search *before* the viewer has any identity,
-the same bootstrapping problem `DevPersonAuthenticationHandler` itself never
-had to solve (a curl caller already knows a Person's id). Registered only
-outside `Production`, the same gate as the dev auth scheme itself, and both
-will be deleted together once CBLT-211 (real AD SSO) lands. On the frontend,
-`web/src/auth/currentPerson.ts` is a small localStorage-backed accessor (not
-a React context) holding `{ id, fullName, roles }`; `api.ts`'s new
-`authorizedFetch` attaches it as the `DevPersonId` header on every dashboard
-call, while the existing guest-facing functions stay untouched and
-unauthenticated. `SignInPage` is a searchable person-switcher (deliberately
-not a single fixed identity) so Admin/Practice Lead/Line Manager scoping can
-actually be exercised and compared in the browser — the entire point of a
-switcher over a hardcoded id. `DashboardLayout` + `RequireCurrentPerson` are
-the shell and route guard every dashboard screen (this milestone's three
-real tickets) mounts inside; the placeholder `HomePage` is gone, replaced by
-`/` redirecting to `/dashboard`. The three dashboard sections render a
-`ComingSoonPage` placeholder until CBLT-243/244/245 replace them one at a
-time, each in its own PR.
-
-CBLT-245 (`OrgTreePage` at `/dashboard/org-tree`) replaces that section's
-`ComingSoonPage` placeholder from CBLT-304 — the first of Milestone 9's three
-real ticketed screens. No backend change: `GET /org-tree` (CBLT-220) was
-already fully role-scoped, so this is purely frontend wiring, satisfying the
-ticket's own "no duplicate tree implementation" AC. `OrgTreeNode` recurses
-over `Reports` to render the forest at arbitrary depth.
-
-CBLT-243 (`OutstandingRequestsPage` at `/dashboard/outstanding-requests`,
-`GET /dashboard/outstanding-requests`, `DashboardService`) is the first
-Milestone 9 ticket needing a genuinely new aggregate backend query — nothing
-before this listed outstanding requests across more than one
-Person/POC/Project at a time. `PersonAuthorizationHelpers` gained
-`GetVisiblePersonIdsAsync` — the union-of-visible-Person-ids scoping
-(Admin: no filter; Practice Lead: own practice; Line Manager: self + direct
-reports) had already been duplicated once between `OrgTreeService` and
-`PocResponseHistoryService.GetProjectPocPatternsAsync`; this ticket's own
-need made it a third occurrence, this project's established threshold for
-extracting a shared helper (same reasoning as `PocRoleHelpers`). Both
-existing call sites were refactored onto it in this same PR, mechanically,
-with no behavior change (their own tests still pass unmodified).
-`RequestDispatchService.ComputePocStatus` was made `internal` (from
-`private`) so `DashboardService.GetOutstandingRequestsAsync` reuses the exact
-same live-computed per-(request, POC) status logic
-`RequestDispatchService.GetPocStatusesAsync` already used for a single
-request, batched here across every request the caller can see. "Outstanding"
-means the computed status isn't `Submitted` (`NotYetSent`/`Sent`/`NoResponse`)
-— the ticket's own two example statuses. Grouping "by cycle" (its third AC)
-is a frontend concern: every `OutstandingRequestEntry` already carries
-`Stage`, so `OutstandingRequestsPage` groups client-side rather than adding a
-per-stage backend endpoint, the same "compute/derive, don't pre-slice"
-precedent as `CatchUpResponse.TriggerSource`. The manual reminder action
-reuses the existing `POST /feedback-requests/{id}/pocs/{pocId}/remind`
-(CBLT-236) — first called from the frontend here.
-
-CBLT-244 (`FlaggedPeoplePage` at `/dashboard/flagged-people`, `GET
-/dashboard/flagged-people`, `DashboardService.GetFlaggedPeopleAsync`) closes
-out Milestone 9. Deliberately keyed off "has a `Pending` `CatchUp`", not
-`Person.UnderReviewSince != null` — the ticket's own title and first AC say
-"Under Review **with a pending catch-up**", and the two can diverge: after an
-`EscalateFurther` outcome (CBLT-241), `UnderReviewSince` is deliberately left
-set but that `CatchUp`'s own `Status` becomes `Recorded`, so the Person
-correctly stops appearing in this view until a fresh flag or ad-hoc trigger
-opens a new `CatchUp` — confirmed by its own test,
-`APersonEscalatedFurther_DoesNotAppearUntilAFreshCatchUpExists`. Uses the
-same `GetVisiblePersonIdsAsync` scoping as CBLT-243.
-
-This PR also builds `CatchUpOutcomePage` (`/dashboard/people/{personId}/catch-up`)
-— the "catch-up outcome recording view" CBLT-244's own third AC/BDD scenario
-says selecting a flagged Person must navigate to, which didn't exist yet:
-CBLT-241/242 shipped backend-only in Milestone 8 (`POST
-/catch-ups/{id}/outcome`, `GET /people/{id}/catch-ups`), explicitly deferred
-at the time since Milestone 9 didn't exist. This is that frontend, arriving
-because CBLT-244's own wording requires the navigation target to work, not
-scope creep. It shows the Person's full catch-up history, with a form (only
-for the currently `Pending` entry) mirroring the backend's own validation —
-`Other` requires notes, shown as an inline `role="alert"` message rather than
-a disabled submit button, the same accessibility precedent `FeedbackForm`
-established in Milestone 6.
-
-`POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}` assign/remove
-one of the fixed Role names on a Person. Assigning `Practice Lead` requires a
-`PracticeId` and sets that `Practice`'s `PracticeLeadId`; removing the role clears
-`PracticeLeadId` on every Practice the Person leads. Re-assigning a role a Person
-already holds (e.g. to change which Practice they lead) is rejected — that's left
-for a future story, since neither the spec nor the current backlog covers it.
-
-## Milestone 13 (Admin Console)
-
-New milestone, added once the dashboard was actually clicked through in a
-browser: there is no frontend anywhere for creating or editing a Department,
-Practice, Person, Project, or POC — all of it has been backend-API-only
-since Milestones 3/4. This is permanent, essential functionality, not
-throwaway test tooling — AD SSO (CBLT-211) will authenticate people, but it
-will never supply org/people/project data, so this application always has
-to be where that data is entered and maintained.
-
-CBLT-305 (`DepartmentsPage` at `/dashboard/admin/departments`) is the first
-ticket — org structure management. New `GET /departments`
-(`DepartmentService.GetAllAsync`, Admin-only) returns every Department with
-its nested Practices via `DepartmentWithPracticesResponse` — the first
-browse view over the org hierarchy; every existing `DepartmentService`
-method before this was either a create or a Practice-scoped, role-gated
-read. No edit/delete for either Department or Practice — the backend has no
-update/delete endpoint for either today, and this ticket doesn't introduce
-one. `DashboardLayout`'s nav gained an "Admin" section, shown only when the
-signed-in person holds the `Admin` role (a client-side UX nicety — the real
-enforcement stays server-side, unchanged) — CBLT-306/307 will add their own
-links to it.
-
-CBLT-306 (`PeoplePage`/`PersonDetailPage` at `/dashboard/admin/people[/:id]`)
-adds People management. New `GET /people` (`PersonService.GetAllAsync`,
-Admin-only) returns a flat `PersonListEntry` per Person — practice name and
-line manager name resolved server-side (rather than making the frontend do
-a second lookup per row), plus `Roles` and `HeadOfPracticeId` — the latter
-included specifically so editing a Person doesn't silently null it out on
-save (the existing `PUT /people/{id}` takes the full field set, not a
-patch). `PersonPicker` (`web/src/components/PersonPicker.tsx`) is a small
-reusable searchable Person select, mirroring `SignInPage`'s existing
-filter-as-you-type pattern — used here for Line Manager/Head of Practice
-selection, and reused as-is by CBLT-307 for adding a Person to a Project.
-All the actual write actions (create, update, assign/remove role, mark
-Leaver) already existed and are unchanged — this ticket is entirely new
-reads plus frontend wiring.
-
-CBLT-307 (`ProjectsPage`/`ProjectDetailPage` at
-`/dashboard/admin/projects[/:id]`) closes out the Admin Console milestone.
-New `GET /projects` and `GET /projects/{id}/people`
-(`ProjectService.GetAllAsync`/`GetMembersAsync`, both Admin-only) — the
-latter is the one genuinely new read: nothing before this browsed "who is
-currently on a Project" (the reverse of `GetProjectsForPersonAsync`).
-`ProjectDetailPage` manages membership (add via the CBLT-306 `PersonPicker`,
-remove) and, per member, a full POC list/add/edit/remove sub-section
-reusing the already-existing `ProjectMembershipPocsResponse` shape (which
-already computes `MissingStandardRoles` for the completeness indicator).
-All write actions (create/complete a Project, add/remove a member, POC
-CRUD) already existed and are unchanged.
-
-## Milestone 12 (Admin Settings)
-
-CBLT-251 (`AppSettings` domain entity, `AdminSettingsService`, `GET`/`PUT
-/admin/settings`, `SettingsPage` at `/dashboard/admin/settings`) is the
-scaffold for this milestone — a single, lazily-created singleton row (one
-`AppSettings` per database, created with defaults the first time
-`AdminSettingsService.GetAsync`/`UpdateAsync` runs against an empty table,
-rather than a migration-time seed) covering every value that today lives in
-a hardcoded default or an interim `IOptions<T>` placeholder
-(`NewStarterCycleOptions`, `GeneralCycleOptions`, `RequestDispatchOptions` —
-each already carried a comment naming the CBLT-25x ticket that would replace
-it with this). Deliberately scoped narrowly: this ticket only adds the table
-and the Admin-only read/write surface, with baseline validation (no empty/
-negative values); it does **not** yet change what any consuming service
-reads from — `ProjectService.AddPersonAsync`, the FY-quarter scheduler, and
-`RequestDispatchService` all keep reading their old `IOptions<T>` until
-CBLT-252/253/254/255 individually switch each one over to this row, one
-setting at a time. `SettingsPage` groups the fields into three sections
-(Cycle Scheduling, Notifications, POC Requirements) purely for display — the
-API has only the one flat row to read/write, matching every other
-full-field-set `PUT` convention in this codebase (e.g. `PUT /people/{id}`).
-
-CBLT-252 is the first setting to actually switch consumption over:
-`ProjectService.AddPersonAsync` now reads `NewStarterIntervalWeeks` from
-`AdminSettingsService.GetAsync()` instead of the old
-`IOptions<NewStarterCycleOptions>`, which is deleted along with its
-`Program.cs` registration — nothing else read it. `AdminSettingsService`
-gained a second validation rule beyond CBLT-251's baseline (non-empty,
-positive): the intervals must be strictly increasing, satisfying this
-ticket's own "reject a non-increasing schedule" AC — `SettingsPage` mirrors
-the same check client-side for immediate feedback, with the server as the
-authoritative guard either way. Every integration test that previously
-constructed `ProjectService` directly with
-`Options.Create(new NewStarterCycleOptions())` now passes
-`new AdminSettingsService(context)` instead — a mechanical swap across ~20
-call sites, since none of those tests cared about the interval source, only
-that `ProjectService` had *some* working settings dependency. The one test
-that did exercise a non-default interval (`ProjectServiceSchedulingTests`)
-now seeds a `AppSettings` row with custom `NewStarterIntervalWeeks` directly
-via the `DbContext` rather than building a custom `IOptions<T>`. "Already-
-scheduled requests are unaffected by a later setting change" (the ticket's
-third AC) holds structurally: `AddPersonAsync` reads the setting once, at
-the moment a Person joins, and bakes the resulting `ScheduledFor` dates onto
-that membership's own `FeedbackRequest` rows — there's no live re-read to
-retroactively drift.
-
-CBLT-253 is the second setting switched over, following the exact pattern
-CBLT-252 established: `FeedbackCycleService.EnrolIntoGeneralCycleAsync` now
-reads `GeneralCycleSkipThresholdWeeks` from `AdminSettingsService.GetAsync()`
-instead of `IOptions<GeneralCycleOptions>`, which is deleted along with its
-`Program.cs` registration. No new validation was needed —
-`AdminSettingsService`'s baseline "positive value" check from CBLT-251
-already satisfies this ticket's "reject a zero/negative threshold" AC. Every
-integration test constructing `FeedbackCycleService` directly with
-`Options.Create(new GeneralCycleOptions())` was mechanically swapped to
-`new AdminSettingsService(context)`; `GeneralCycleSchedulingTests`'
-`CreateService` helper dropped its now-unused `skipThresholdWeeks`
-parameter (no test actually overrode the default), and gained a new test
-proving a configured 6-week threshold changes the skip decision a 5-week-out
-enrolment makes, where the previous test already proves the 4-week default
-does not skip at the same distance.
-
-CBLT-254 is the third setting switched over: `RequestDispatchService`'s
-constructor now takes `AdminSettingsService` instead of
-`IOptions<RequestDispatchOptions>`, and
-`DispatchDueAutomaticRequestsAsync` reads `AutomaticRequestSendingEnabled`
-from it — the now-fully-unused `RequestDispatchOptions.cs` (both the
-options class and its `RequestDispatchMode` enum) is deleted along with its
-`Program.cs` registration. No behaviour changed for `DispatchManuallyAsync`,
-which already ignored the mode entirely (an authorised user can always
-force a send regardless). Every integration test constructing
-`RequestDispatchService` directly was mechanically swapped the same way as
-CBLT-252/253; the one test exercising Manual mode now flips the setting on
-its own context instead of passing a `RequestDispatchMode` constructor
-argument (which no longer exists). Added a new test proving the "no
-retroactive effect" AC directly: dispatch a request under Automatic, then
-switch to Manual and dispatch again — the already-`Sent` request's status
-is untouched, since the second pass finds nothing due (the mode only gates
-whether the pass runs `dueRequests` selection at all, not any already-Sent
-row).
-
-CBLT-255 closes out the Admin Settings milestone, changing
-`PocRoleHelpers.ComputeMissingRoles`'s meaning of "missing" from "zero
-representatives of this role" to "fewer than the Admin-configured target
-count for this role" — its signature grew a
-`IReadOnlyDictionary<PocRole, int> targetCounts` parameter fed by
-`AdminSettingsService.ToPocRoleTargets(settings)` (a new small static
-helper shared by both call sites, avoiding each duplicating the
-settings-fields-to-dictionary mapping). Both existing callers —
-`PocService.BuildResponseAsync` and `ProjectService.GetProjectsForPersonAsync`
-— now take `AdminSettingsService` as a constructor dependency and fetch the
-current targets before computing. Unlike CBLT-252/253/254, there was no
-prior `IOptions<T>` placeholder to delete here — the "exactly one of each
-role" default lived as an implicit assumption baked directly into
-`ComputeMissingRoles`'s old single-argument signature, not a named config
-class — and no test constructs `PocService`/`ProjectService`'s completeness
-path directly with a bespoke dependency (both are only exercised through
-HTTP endpoints via `WebApplicationFactory`), so this ticket needed no
-mechanical test-file sweep like the previous three. Default behaviour under
-the unmodified 1/1/1 target is unchanged, confirmed by the full existing
-`PocEndpointsTests`/`PersonProjectsEndpointTests` suites passing unmodified,
-plus two new tests: raising the Tech target to 2 flags a Project with only
-one Tech POC as incomplete, and assigning a POC beyond a role's target is
-still allowed and never flagged missing.
-
-## Milestone 11 (Data Protection & Audit)
-
-CBLT-250 (guest contact details captured fresh per project, no reuse) is a
-verification-and-hardening ticket, not new build: confirmed via direct
-reads that the data model already satisfies every clause of its AC.
-`Poc` (`Domain/Poc.cs`) is "never an existing system user, just a name/
-email/relationship snapshot" scoped one-to-one to a `ProjectMembership` —
-`PocService.AssignPocAsync` always inserts a brand-new row straight from
-the request body, with no lookup, no matching-by-name/email, and no FK to
-any shared "contact" entity. No endpoint anywhere lists `Poc` rows across
-memberships/Projects (the only two `GET .../pocs` routes are both scoped
-to one specific `(projectId, personId)` pair) — there is no standing
-directory to reuse from, structurally. The frontend's `PocManager` form
-(`ProjectDetailPage.tsx`) uses plain `<input>` fields with no `list`/
-datalist wiring and no lookup fetch on change. Added a new integration
-test, `TheSamePersonAssignedAsPocOnTwoProjects_AreIndependentRecords`,
-proving the same name/email assigned as a POC on two different Projects
-produces two independently-`Id`'d rows where editing one never affects the
-other — the existing `PocsAreScopedToOneMembership_NotSharedAcrossProjects`
-test already proved the narrower "assigning on A doesn't leak to B", but
-not this "explicitly assigning the same details on both stays independent"
-case. Added a frontend regression test confirming typing in the POC name/
-email fields triggers no additional network call, closing the loop on the
-ticket's "no autocomplete/suggestion" BDD scenario.
-
-CBLT-249 (`AuditLogEntry`, `AuditLogService`, `GET /audit-log`, `AuditLogPage`
-at `/dashboard/admin/audit-log`) adds the immutable "who viewed/exported
-whose feedback, when" trail spec Section 11 requires. `AuditLogEntry`
-deliberately carries no reference to any specific `FeedbackSubmission` — only
-`ViewerId`/`PersonId`/`Action`/`OccurredAt` — so an entry survives intact
-once the 6-month post-leaver retention job (CBLT-248, not yet built) removes
-the feedback content it once referred to. `AuditLogService` only ever
-inserts (`RecordViewAsync`/`RecordExportAsync`) — there is no update/delete
-method, the same immutability-by-omission precedent as `FeedbackSubmission`.
-`GetLogAsync` combines its four optional filters (Person, viewer, from, to)
-with AND, Admin-only per the ticket's own AC. `RecordExportAsync` has no
-caller yet — CBLT-247 (PDF export, not yet built) will be its first, since
-its own AC requires every export to be audited. `RecordViewAsync` likewise
-has no caller: no endpoint anywhere today exposes a Person's actual feedback
-content to an internal viewer at all (only aggregate status, e.g.
-`DashboardService`'s submitted/outstanding counts) — the only planned
-mechanism for seeing content is the PDF export itself, so this hook stays
-dangling exactly like CBLT-227/230's cycle-engine hooks did in Milestone 5,
-wired up only once a real content-viewing feature exists to call it.
-
-## Milestone 10 (Export & Anonymisation)
-
-CBLT-246 (`Domain/FeedbackAnonymiser.cs`) is the core content transform spec
-Section 10 requires — pure logic, no EF Core, no HTTP, tested entirely in
-`CheckPoint.Api.UnitTests` (`FeedbackAnonymiserTests.cs`), the first ticket
-in this whole project whose behaviour lives entirely there rather than in
-the integration test suite. `IdentifiedFeedbackEntry` (the input, still
-carrying `RespondentName`/`RespondentEmail`/`RespondentRole`) is
-deliberately not the `FeedbackSubmission` entity itself, so this transform
-has zero database dependency and stays trivially reusable by any future
-anonymised view — `Anonymise` is a plain static method over an
-`IEnumerable<IdentifiedFeedbackEntry>`, callable from CBLT-247's PDF export
-or anything else without adjustment. `AnonymisedFeedbackEntry` (the output)
-has no name/email/role property at all, so there's nothing for a careless
-caller to accidentally forward — a stronger guarantee than filtering fields
-at the call site. Ordering is derived purely from the content itself
-(`DoingWell`/`NotDoingWell`/`NeedsToImprove`, ordinal, three-way
-tie-broken), never from submission time or POC list position — this
-satisfies both "no correlation clue back to a respondent" and
-"deterministic given the same input" simultaneously, since a pure
-content-derived sort key can never depend on input order or wall-clock
-time. Not yet wired to any endpoint — CBLT-247 will be its first caller.
-
-CBLT-248 (`Person.LeaverSince`, `LeaverRetentionService`,
-`LeaverRetentionBackgroundService`) closes out Milestone 11 with the
-highest-blast-radius ticket in the project so far — permanent, irreversible
-deletion — and was shipped last within this milestone for exactly that
-reason, once every other Person/Poc/FeedbackSubmission-touching piece
-(CBLT-249/250) was already stable. `Person.LeaverSince` (new nullable
-`DateTimeOffset`, migration `AddPersonLeaverSince`) is set once, the moment
-`PersonService.MarkAsLeaverForViewerAsync` flips `Status` to `Leaver` —
-never cleared, matching that transition's existing one-way design — and is
-the strict anchor for the 6-month clock; nothing before this ticket recorded
-when a Leaver actually became one. `LeaverRetentionService.
-PurgeExpiredLeaversAsync` finds every Leaver whose `LeaverSince` is 6 months
-or older and, per Person, hard-deletes exactly three kinds of row scoped to
-their `ProjectMembership`s: `MagicLink`s (deleted first — `PocId` is a
-Restrict FK to `Poc`, so these must go before the `Poc` rows they
-reference), `FeedbackSubmission`s (the feedback content itself — deleting
-these cascades to any `LmNotification` outbox row via the already-configured
-cascade), and `Poc`s (the respondent identity snapshot). The Person row
-itself, their `ProjectMembership`s, and every `FeedbackRequest`'s own
-scheduling metadata are deliberately untouched — none of that is
-feedback-related personal data, satisfying the ticket's own "org history is
-unaffected" AC. `LeaverRetentionBackgroundService` follows the exact same
-`BackgroundService` + `IServiceScopeFactory` shape as
-`RequestDispatchBackgroundService`/`LmNotificationDispatchBackgroundService`
-(same not-registered-in-`"Testing"` gate), but polls daily rather than
-every minute, appropriate to a 6-month-resolution job. Tested directly
-against the service (no HTTP endpoint exists, since nothing triggers this
-job but the poll itself) with a `FakeTimeProvider`, the same style as
-`ProjectServiceSchedulingTests`/`GeneralCycleSchedulingTests`; verified
-manually via `docker compose` by backdating a seeded Leaver's
-`LeaverSince` directly in Postgres and restarting the API container (the
-background service always runs once immediately on startup, before its
-first `Task.Delay`), confirming the submission/POC/magic-link rows were
-gone while the Person and their `ProjectMembership` remained fully intact.
-
-### Enums serialize as strings, not raw integers (critical bug fix, found while smoke-testing CBLT-307's POC form)
-
-The API never configured a `JsonStringEnumConverter`, so **every** enum in
-**every** contract (`ProjectStatus`, `PersonStatus`, `PocResponseStatus`,
-`CatchUpStatus`, `CatchUpTriggerSource`, `PocRelationship`, `PocRole`,
-`CatchUpOutcomeType`, `FeedbackRequestStage`, ...) had, until now, silently
-serialized as its raw underlying integer — the plain `System.Text.Json`
-default — even though every frontend TypeScript type across every dashboard
-and admin screen (Milestones 7-9, 13) assumes the member's name as a string
-(e.g. `project.status === 'Active'`, `entry.status === 'Pending'`). Those
-comparisons had never actually matched anything in a real browser; nothing
-caught it because every frontend unit test stubs `fetch` with hand-written
-JSON that already used the intended string values, and no manual end-to-end
-click-through had exercised an enum-bearing comparison against the real API
-until CBLT-307's own manual smoke test (creating a POC with
-`"relationship":"Internal"` in the request body) got rejected outright by
-the server, which could only deserialize a number.
-
-Fixed with one line in `Program.cs` —
-`builder.Services.ConfigureHttpJsonOptions(options =>
-options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()))` —
-which fixes both directions for every current and future enum-bearing
-contract at once: incoming request bodies can now name an enum member by
-string (still also accepting the old numeric form, `JsonStringEnumConverter`'s
-default `allowIntegerValues: true`), and every response now sends the
-member's name, matching what the frontend already expected all along.
-`api/CheckPoint.Api.IntegrationTests/JsonTestOptions.cs` (new) mirrors this
-on the test side — `HttpClient.ReadFromJsonAsync<T>()` has no way to pick up
-the server's own `JsonOptions` automatically, so every one of the ~70 call
-sites across the integration test suite was mechanically updated to pass
-`JsonTestOptions.Value` explicitly. Outgoing `PostAsJsonAsync`/`PutAsJsonAsync`
-calls needed no changes — they still serialize C# enum values as numbers by
-default, which the server's converter accepts either way.
-
-### CORS (bug fix, found while testing the dev seed data end-to-end in a browser)
-
-There was no CORS configuration anywhere in the API — the frontend and API have
-always been served from different origins (different ports locally via Docker
-Compose, separate hosts once deployed to Azure Container Apps), with the browser
-calling the API directly and no reverse proxy in between. This went unnoticed
-through the entire guest feedback flow (Milestone 6) and every dashboard PR
-(Milestone 9) because every frontend test stubs `fetch` directly rather than
-exercising a real browser's CORS enforcement — the first person to actually
-click through the dashboard in a browser hit `No 'Access-Control-Allow-Origin'
-header is present`. Fixed with `builder.Services.AddCors()`/`app.UseCors()` in
-`Program.cs`, allowing exactly `FrontendOptions.BaseUrl` (the same
-already-config-driven setting used to build magic-link URLs in emails — no new
-setting to keep in sync) with any header/method, which covers both the plain
-guest-flow requests and `authorizedFetch`'s custom `DevPersonId` header.
-Registered unconditionally (not gated to Development) since the deployed
-environment will need this too, once frontend and API are on separate Azure
-Container Apps hosts.
-
-### Dev seed data (local Development only)
-
-`DevDataSeeder.SeedAsync` (called from `Program.cs`, gated to
-`app.Environment.IsDevelopment()` specifically — not the broader
-"not Production" gate the dev auth scheme/`GET /dev/people` use, since
-integration tests run in a "Testing" environment against a fresh database
-per test class and would have this seed data corrupt their fixtures)
-inserts one Person per role plus one plain report, only when the `People`
-table is completely empty: **Ada Admin** (Admin), **Lee Lead** (Practice
-Lead, set as the seeded Practice's lead), **Morgan Manager** (Line Manager),
-and **Riley Report** (no roles, reports to Morgan). All four in one seeded
-Department/Practice. This exists purely so the dev sign-in picker
-(`GET /dev/people`, CBLT-304) has real people to switch between locally
-without first needing an existing Admin to create any — the same
-bootstrapping gap that motivated `GET /dev/people` itself. Runs once per
-fresh database (idempotent via the empty-table check) — safe to restart the
-API repeatedly without duplicating rows.
-
-### Auth (interim, until CBLT-211)
-
-There is no real sign-in yet. `api/CheckPoint.Api/Auth/DevPersonAuthenticationHandler.cs`
-is a stand-in: the caller identifies themselves via a `DevPersonId` header carrying
-an existing `Person`'s `Id`, and the handler loads that Person's `Role`s from the
-database to build the ASP.NET Core role claims `[Authorize(Roles = ...)]` checks
-against. This means permissions are already DB-driven (via the Person↔Role model
-from CBLT-210) — when CBLT-211 replaces this with real AD SSO, only the *identity*
-resolution changes (validating an AAD token instead of a header, then looking up the
-matching Person), not the underlying role/claims model.
-
-This scheme is registered only outside the `Production` environment (see
-`Program.cs`) — in `Production`, no scheme is registered at all, so every
-`[Authorize]`-protected endpoint rejects every request until real SSO exists
-(fails closed rather than granting access). Local Docker Compose sets
-`ASPNETCORE_ENVIRONMENT=Development` on the `api` service specifically so this
-stand-in works for local testing; never set that in a real deployment.
-
-To call a protected endpoint locally, pass an existing Person's id:
+Milestone 1 (Infrastructure & Tooling): containerisation, Docker Compose, test
+project scaffolding, and PR/main CI (partial — see above) are done. Remaining:
+Azure image push + deploy and Azure provisioning (CBLT-205/206), both on hold
+pending Azure access.
+
+**Auth (interim, until CBLT-211):** there is no real sign-in yet.
+`api/CheckPoint.Api/Auth/DevPersonAuthenticationHandler.cs` is a stand-in: the
+caller identifies themselves via a `DevPersonId` header carrying an existing
+`Person`'s `Id`, and the handler loads that Person's `Role`s from the database to
+build the ASP.NET Core role claims `[Authorize(Roles = ...)]` checks against.
+Permissions are already DB-driven (via the Person↔Role model, Milestone 2) — when
+CBLT-211 replaces this with real AD SSO, only the *identity* resolution changes
+(validating an AAD token instead of a header), not the underlying role/claims model.
+Registered only outside the `Production` environment (see `Program.cs`) — in
+`Production`, no scheme is registered at all, so every `[Authorize]`-protected
+endpoint rejects every request until real SSO exists (fails closed rather than
+granting access). Local Docker Compose sets `ASPNETCORE_ENVIRONMENT=Development` on
+the `api` service specifically so this stand-in works locally; never set that in a
+real deployment. To call a protected endpoint locally:
 ```bash
 curl -X POST http://localhost:8080/departments \
   -H "Content-Type: application/json" \
   -H "DevPersonId: <an-admin-persons-guid>" \
   -d '{"name":"Tech & Data"}'
 ```
+`GET /dev/people` (`Endpoints/DevEndpoints.cs`) is deliberately unauthenticated —
+it exists so the frontend sign-in picker has something to search *before* the
+viewer has any identity. Registered only outside `Production`, same gate as the
+dev auth scheme, and both will be deleted together once CBLT-211 lands.
+`DevDataSeeder.SeedAsync` (gated to `IsDevelopment()` specifically, not the
+broader "not Production" gate the other two use — integration tests run in a
+"Testing" environment against a fresh database per test class and would have
+this seed data corrupt their fixtures) inserts one Person per role plus one
+report, only when the `People` table is empty, so the sign-in picker has real
+people to switch between locally without needing an existing Admin first.
+`web/src/auth/currentPerson.ts` is a small localStorage-backed accessor (**not**
+a React context, deliberately — see the frontend review notes below for the
+implication) holding `{ id, fullName, roles }`; `api.ts`'s `authorizedFetch`
+attaches it as the `DevPersonId` header on every dashboard call, while the
+guest-facing functions stay unauthenticated. `SignInPage` is a searchable
+person-switcher (not a hardcoded identity) so Admin/Practice Lead/Line Manager
+scoping can actually be exercised and compared in the browser.
+
+The magic-link mechanism for guest respondents (`Services/MagicLinkService.cs`)
+is deliberately independent of `FeedbackRequest` and the guest-facing form
+(built later); it only ever knows an opaque `FeedbackRequestId`. Full RBAC
+enforcement per the design spec's Section 8 permission matrix (CBLT-212) is
+**blocked** — the spec doc isn't available (see "Linear" above) and most of the
+actions it would gate don't exist as endpoints yet.
+
+**Org & People Management:** Department/Practice/Person CRUD, role
+assignment/removal, marking a Person as Leaver, cross-practice
+visibility/orphan detection, and a scoped org tree view are done. Everything
+under `/people` is Admin-only except `POST /people/{id}/leaver`, which a Line
+Manager may also call for their own reports (a manual check against
+`Person.LineManagerId`, not a plain role check — the same "manual check" pattern
+recurs below for endpoints whose authorization doesn't fit a flat role). The
+Leaver transition is deliberately one-way (no "un-leaver" action). Cancelling a
+Leaver's outstanding feedback requests and excluding them from future cycle
+enrolment is handled once the cycle engine understands `Person.Status`, not as
+a separate step.
+
+`GET /practices/{id}/people` lists People tagged to a Practice with a computed
+`IsOrphaned` flag (true when a Person has no `LineManagerId`, or their Line
+Manager's own `PracticeId` differs from theirs) — computed fresh on every read,
+never stored, so it can't go stale when either Person's Practice or Line
+Manager changes later. `Person.Email` is a nullable `string?` — deliberately
+not required, since no real sign-in exists yet to require or verify one; it
+becomes load-bearing once AD SSO (CBLT-211) and per-submission LM notification
+email exist, until then a null `Email` just means "nothing to send to yet."
+
+`GET /org-tree` (any authenticated caller — the role-scoping happens inside
+`OrgTreeService`, not a group-level policy) returns a forest of `OrgPersonNode`
+with nested `Reports`; visibility is a union of whatever the caller's roles
+grant (Admin: everyone; Practice Lead: everyone in a Practice they lead; Line
+Manager: themselves plus their direct reports, not deeper). A Person whose
+Line Manager falls outside the caller's visible set becomes a root in the
+returned forest rather than being dropped. A caller holding none of the three
+roles gets an empty list, not a 403. The tree-building code guards against a
+manager cycle in the data (e.g. two edits leaving A → B → A) to avoid infinite
+recursion. `PUT /people/{id}` rejects a Person being set as their own Line
+Manager.
+
+The Admin Console's `DepartmentsPage`/`PeoplePage`/`PersonDetailPage`
+(`/dashboard/admin/departments`, `/dashboard/admin/people[/:id]`) are the
+frontend for all of the above — see "Admin Console" below for why this
+milestone exists. `PersonPicker` (`web/src/components/PersonPicker.tsx`) is a
+small reusable searchable Person select (mirroring `SignInPage`'s
+filter-as-you-type pattern), used for Line Manager/Head of Practice selection
+and reused as-is for adding a Person to a Project.
+
+**Project & POC Management:** creating a Project, adding/removing a Person, and
+completing a Project are done, Admin-only. `Person`<->`Project` is an explicit
+join entity, `ProjectMembership` (not an implicit many-to-many like
+`Person`/`Role`), because a Person's per-Project feedback cycle needs somewhere
+to attach state to a specific Person-Project pairing. `DELETE
+/projects/{id}/people/{personId}` soft-deletes (`RemovedAt`, not a row delete)
+so a Person's history on a Project survives removal. Adding a Leaver to a
+Project is rejected; adding a Person schedules their New Starter cycle (see
+"Feedback Cycle Engine" below). `POST /projects/{id}/complete` rejects an
+already-Completed Project and cancels every still-`Scheduled`
+`FeedbackRequest` tied to the Project; it never touches the Person's own
+status or their other Projects.
+
+Assigning POCs is scoped to one Person's `ProjectMembership` (`Poc` entity,
+cascade-deletes with its membership since it's meaningless without one).
+`POST`/`GET /projects/{id}/people/{personId}/pocs` are callable by Admin, the
+target Person's Practice Lead, or their Line Manager — a three-way manual
+check, the same pattern used by the Leaver and Practice-view endpoints (now
+extracted into `Services/PersonAuthorizationHelpers.cs` once it had been
+copy-pasted a third time — see `PocService`/`RequestDispatchService`).
+`MissingStandardRoles` (which of Tech/DM/Other have no active POC) is computed
+fresh on every read, never stored, and is shared between `PocService` and
+`ProjectService` via `Domain/PocRoleHelpers.cs`. `PUT`/`DELETE .../pocs/{pocId}`
+hard-delete a single POC (no "history" requirement exists for POCs the way it
+does for `ProjectMembership`). Cancelling a removed POC's outstanding feedback
+request is deferred (the dispatch job that would need to look this up doesn't
+exist yet); correcting a POC's email has no effect on already-sent magic links
+since `MagicLink` only ever carries an opaque `FeedbackRequestId`, never the
+POC's email.
+
+`GET /people/{personId}/projects` lists every Project a Person is on, with
+per-Active-Project `MissingStandardRoles` (`null` for a Completed Project).
+Visibility follows the same three-way role scoping as everything else above.
+
+The Admin Console's `ProjectsPage`/`ProjectDetailPage`
+(`/dashboard/admin/projects[/:id]`) is the frontend — membership add/remove
+plus, per member, full POC list/add/edit/remove.
+
+**Guest Contact Details verification (data protection):** confirmed via direct
+reads that the data model already prevents contact reuse across projects —
+`Poc` is "never an existing system user, just a name/email/relationship
+snapshot" scoped one-to-one to a `ProjectMembership`, with no lookup, no
+matching-by-name/email, no FK to any shared "contact" entity, and no endpoint
+anywhere lists `Poc` rows across memberships/Projects. The frontend's
+`PocManager` form (`ProjectDetailPage.tsx`) uses plain `<input>`s with no
+autocomplete/lookup wiring.
+
+**Feedback Cycle Engine:** `FeedbackRequest` is one row per scheduled request,
+carrying `ProjectMembershipId`, `ScheduledFor`, and a `Status`
+(`Scheduled`/`Sent`/`Cancelled`) — it deliberately carries no snapshot of which
+POCs to send to; the dispatch job resolves the Project's currently assigned
+POCs at send time. `ProjectService.AddPersonAsync` schedules one
+`FeedbackRequest` per configured New Starter interval (default 2/4/8 weeks)
+relative to the Person's own `ProjectMembership.JoinedAt`, not the Project's
+creation date, so staggered starters get staggered schedules. Interval config,
+the FY-quarter skip threshold, and the automatic/manual dispatch toggle are
+all now read from `AdminSettingsService` — see "Admin Settings" below for how
+that switch-over happened; before it existed they were interim `IOptions<T>`
+config bindings, and changing the read source didn't change any scheduling
+logic itself. `ProjectService.CompleteProjectAsync` also cancels every
+still-`Scheduled` `FeedbackRequest` tied to the Project. `MagicLink
+.FeedbackRequestId` remains a bare, unconstrained `Guid` rather than a real FK
+to `FeedbackRequest` — a deliberate decoupling from the original magic-link
+design, not revisited since.
+
+`FeedbackRequest` also carries a `Stage` (`NewStarterWeek2`/`Week4`/`Week6`/
+`Week8`/`General`), separate from `Status` — needed so the cycle engine can
+recognise "the 4-week check-in" reliably rather than inferring it from
+`ScheduledFor` minus `JoinedAt`, which would break under a reconfigured
+interval set. `FeedbackCycleService.HandleCheckInFlaggedAsync` is the
+auto-insert-a-6-week-check-in hook: flagging a `NewStarterWeek4` request
+schedules one `NewStarterWeek6` request (idempotent), flagging any other stage
+does nothing. It sat **dangling with zero non-test callers** from the moment
+it was built until the ad-hoc-review milestone wired it up (see below) — a
+deliberate "ship the hook first" precedent that recurs a few times in this
+project (see Audit Log/Anonymisation in "Data Protection & Export" below);
+tested by calling the service directly in the meantime.
+
+`ProjectMembership.GeneralCycleEnrolledAt` (nullable, set once, never cleared)
+marks a membership as having transitioned from the New Starter cycle into the
+General (quarterly) cycle — both the idempotency guard and the anchor date the
+quarterly schedule counts from. Set when the `NewStarterWeek8` request (always
+the last New Starter stage chronologically) concludes, unless the Project has
+since Completed or the Person has since become a Leaver, in which case
+enrolment is skipped. `HandleFeedbackRequestCompletedAsync` dispatches by
+`Stage`: a `NewStarterWeek8` completion enrols into the General cycle *and*
+schedules its first `General` request; a `General` completion schedules the
+next one, continuing every FY quarter (Apr–Jun/Jul–Sep/Oct–Dec/Jan–Mar) until
+the Project completes or the Person becomes a Leaver. On first enrolment, if
+the next quarter boundary falls within the configured skip threshold of the
+enrolment moment, that quarter is skipped in favour of the one after.
+Subsequent quarters are anchored to the *previous* request's own
+`ScheduledFor` (always a quarter-start date) rather than "now" processed-at
+time, so the cadence never drifts. A single `General` stage value covers every
+quarter — quarters have no distinct identity beyond "the next one."
+Idempotency for both New Starter and General scheduling is a
+does-a-later-request-already-exist check.
+
+`HandleCheckInFlaggedAsync`, once wired up (see "Ad-hoc Review" below), always
+sets `Person.UnderReviewSince` (orthogonal to `Status`: Employed/Leaver is an
+employment lifecycle, being under review is a separate, overlapping flag) and
+creates a pending `CatchUp` record, with the New-Starter-4-week-specific
+6-week insert layered on top only for that stage. Idempotent per check-in via
+a does-a-`CatchUp`-already-exist-for-this-`FeedbackRequestId` check (a
+*different* check-in for the same Person still gets its own `CatchUp`).
+`CatchUp` doesn't store who the LM/Practice Lead actually are — like
+`Person.IsOrphaned`, that's resolved live via `Person.LineManagerId`/
+`Practice.PracticeLeadId` at read time.
+
+**Guest Feedback Form:** the guest landing page was the first real frontend UI
+screen in this project (everything before it was backend-only). `GET
+/magic-links/{token}` wraps `MagicLinkService.ValidateAsync` and is
+deliberately unauthenticated — no `RequireAuthorization` at all, since a guest
+never signs in — mapping `Valid`→200, `NotFound`→404, `Expired`→410,
+`AlreadyUsed`→409. `react-router-dom` is the frontend's routing dependency;
+`web/src/App.tsx` is the route table, `web/src/pages/` holds one component per
+screen, `web/src/api.ts` is the fetch-wrapper convention (plain `fetch` plus
+`getApiBaseUrl()`, no HTTP client library). `GuestFeedbackPage` renders one of:
+loading, expired, already-submitted, invalid-link, or (once valid) the form.
+
+`web/src/components/FeedbackForm.tsx` is the three-field form ("doing well" /
+"not doing well" / "needs to improve"), all required, each capped at 2000
+characters. Deliberately does **not** set an HTML `maxLength` on the
+`<textarea>`s: a guest can type past the limit, see the counter turn red, and
+get a blocking validation message on submit, rather than being silently
+stopped mid-keystroke — matches the accessibility-conscious pattern used
+throughout the guest/dashboard forms (see also `CatchUpOutcomePage` below):
+the Submit button is never `disabled`; invalid attempts show inline
+`role="alert"` errors and `aria-invalid`/`aria-describedby` instead, since a
+silently-disabled button gives screen-reader/keyboard users no explanation for
+why nothing happens.
+
+`POST /magic-links/{token}/submission` (`FeedbackSubmissionService`) handles a
+completed submission. Content validation (required + 2000-char limit,
+mirroring the frontend's own rules since the API is public and can't trust
+client-side validation alone) happens *before* the magic link is touched, so a
+rejected submission never burns the guest's one chance to submit.
+`MagicLinkService.LoadAndCheckAsync` is `internal`, not `private`, precisely
+so this service can validate a token and then mutate the same tracked
+`MagicLink` as part of one `SaveChangesAsync`, rather than consuming the link
+before knowing the submission will succeed. One `SaveChangesAsync` marks the
+`MagicLink` used, inserts the immutable `FeedbackSubmission` row, and — if the
+Person has a `LineManagerId` — inserts an `LmNotification` outbox row.
+`FeedbackRequest.Status` is deliberately left untouched by submission: it
+tracks the request's own dispatch lifecycle, not response state, since a
+request can have several currently-assigned POCs each responding
+independently. There is deliberately no endpoint that edits a
+`FeedbackSubmission` — immutability is enforced by omission, not a guarded
+field. `LmNotification` is a durable outbox, not an actual send: it's written
+in the same transaction as the submission, so it satisfies "must not be
+silently dropped" by construction even before the dispatch job exists. No
+line manager assigned is "nobody to notify," not a dropped notification.
+
+`MagicLink` and `FeedbackSubmission` both carry a `PocId` (real FK to `Poc`),
+and `FeedbackSubmissions`' unique index is `(FeedbackRequestId, PocId)` rather
+than `FeedbackRequestId` alone — needed once per-POC email dispatch required
+issuing one magic link per currently-assigned POC (not one per request), and
+since outcomes are tracked per POC, not aggregated onto the request as a
+whole (a request with 3 POCs can have a mix of Submitted/No-Response
+outcomes). Whether a given POC has responded is always answered by whether a
+`FeedbackSubmission` row exists for that `(FeedbackRequestId, PocId)` pair —
+never stored as a status on `FeedbackRequest` itself.
+
+**Notifications & Response Tracking:** `RequestDispatchService` sends the POC
+feedback request email containing a magic link — one `MagicLink` (and email)
+per currently-assigned POC on the request's `ProjectMembership`, each scoped
+to that POC and request only. Entry points: `DispatchDueAutomaticRequestsAsync`
+(polled every minute by `RequestDispatchBackgroundService`, an
+`IHostedService`), `DispatchManuallyAsync` (`POST
+/feedback-requests/{id}/dispatch`, same three-way scoping as `PocService`),
+and `SendReminderAsync` (below). Automatic dispatch is gated by the
+Admin-configured toggle (see "Admin Settings"); the manual endpoint works
+regardless, since an authorised user can always force a send.
+`RequestDispatchBackgroundService` is **not registered in the "Testing"
+environment** (see `Program.cs`): it runs on real wall-clock time via
+`Task.Delay`, which would otherwise fire unpredictably against tests that
+advance a `FakeTimeProvider` instead of real time — the same
+not-registered-in-Testing gate applies to `LmNotificationDispatchBackgroundService`
+and `LeaverRetentionBackgroundService` below, for the same reason.
+
+Actual email sending is behind an `IEmailSender` interface — `SmtpEmailSender`
+is the real implementation (BCL `SmtpClient`; no SMTP server exists in any
+environment this project has run in yet, so a misconfigured deployment fails
+loudly rather than pretending to send). Tests substitute a
+`RecordingEmailSender` fake. The frontend URL embedded in each email comes
+from `FrontendOptions.BaseUrl` (plain infra config, not an Admin Setting),
+wired via `Frontend__BaseUrl` in `docker-compose.yml`.
+
+A due request whose `ProjectMembership.RemovedAt` is set (person left the
+project after the request was scheduled) is marked `Cancelled` instead of
+sent. A due request with zero currently-assigned POCs is left `Scheduled` and
+retried next pass rather than marked `Sent` with nothing actually sent.
+
+`SendReminderAsync` (`POST /feedback-requests/{id}/pocs/{pocId}/remind`)
+resends to one non-responding POC — a plain resend, not a new
+`FeedbackRequest`: issues a fresh `MagicLink` (fresh 7-day expiry) and
+invalidates whatever prior, still-usable link(s) existed for that exact
+`(FeedbackRequest, Poc)` pair. `MagicLink.InvalidatedAt` is distinct from
+`UsedAt` — a superseded link was never used to submit, just replaced.
+`MagicLinkService`/`FeedbackSubmissionService` both have a `Superseded` status
+(mapped to `410 Gone`, same as `Expired`) so a guest with an old link sees
+"replaced by a more recent one" rather than the misleading "already
+submitted." Rejected with `NotYetDispatched` if the request isn't `Sent` yet,
+or `AlreadySubmitted` if that POC already has a `FeedbackSubmission`.
+
+`GetPocStatusesAsync` (`GET /feedback-requests/{id}/pocs`) reports each
+currently-assigned POC's outcome (`NotYetSent`/`Sent`/`Submitted`/
+`NoResponse`/`Cancelled`) — never a single status on the request as a whole,
+since different POCs on the same request can be in different states.
+Deliberately **computed live** on every call (given the current time, whether
+a `FeedbackSubmission` exists, and the most recent non-invalidated
+`MagicLink`) rather than a stored flag flipped by a background job — no risk
+of drifting out of sync with "now," no extra job/infra needed. A POC added
+after dispatch reads as `NotYetSent`. `RequestDispatchService.ComputePocStatus`
+is `internal` (not `private`) so `DashboardService` reuses the exact same
+logic batched across every request a caller can see (see "Dashboard" below).
+
+`LmNotificationDispatchService.DispatchPendingNotificationsAsync` (polled
+every minute) delivers the `LmNotification` outbox rows, never batched —
+three respondents submitting at different times means three separate emails
+to the LM. A pending row whose `LineManager.Email` is null is skipped (left
+pending, retried) rather than treated as a failure. The email contains a
+link, never the feedback content itself, pointing at
+`{FrontendOptions.BaseUrl}/people/{personId}` — no magic-link-style token
+needed, since an LM is a standing system user protected by ordinary
+`[Authorize]`.
+
+`PocResponseHistoryService.GetPocHistoryAsync` (`GET
+/pocs/{pocId}/response-history`) tracks non-response as a pattern across
+check-ins, not just the most recent one — generalizes the live per-(request,
+POC) status computation across every `FeedbackRequest` sharing that POC's
+`ProjectMembershipId`, most-recent-first; a request the POC was never
+dispatched to is excluded from their history entirely. Returns both
+`ConsecutiveNoResponseCount` and `TotalNoResponseCount` — no fixed "pattern"
+threshold is invented, since none is defined; raw counts only.
+`GetProjectPocPatternsAsync` (`GET /projects/{projectId}/poc-response-patterns`)
+is a filtered list, not a pass/fail gate, following the same
+`visiblePersonIds` union scoping as the org tree.
+
+`PersonAuthorizationHelpers.IsAuthorizedForPersonAsync` (Admin, or the target
+Person's own Line Manager, or their Practice's Lead) was extracted out of
+`PocService` and `RequestDispatchService` once they'd been carrying
+byte-for-byte identical copies of this check — the same "extract once
+genuinely reused a third time" precedent as `PocRoleHelpers`.
+
+**Ad-hoc Review / Flagging:** `FeedbackCycleService.FlagCheckInAsync` (`POST
+/feedback-requests/{id}/flag`) was the first ticket to actually wire up
+`HandleCheckInFlaggedAsync`, which had sat dangling with zero non-test callers
+since it was built. It's a thin caller-aware wrapper: loads the request,
+authorizes, calls the existing hook unchanged. Deliberately a **two-way**
+check (Admin OR the Person's own Line Manager) rather than the three-way
+`PersonAuthorizationHelpers` check used elsewhere — its own AC only ever
+mentions a Line Manager, unlike ad-hoc triggering (next), whose AC explicitly
+includes Practice Lead too — a deliberate, textually-supported contrast
+between the two, not an oversight.
+
+`TriggerAdHocReviewAsync` (`POST /people/{personId}/ad-hoc-review`) lets a
+Practice Lead or Line Manager start a review independent of a check-in — same
+underlying mechanism as flagging (set `UnderReviewSince`, add a `CatchUp`),
+but with `FeedbackRequestId` left `null` and never triggering a 6-week
+insert. Three-way auth here, unlike the two-way flagging check, since this
+ticket's AC explicitly names both roles. `CatchUp.FeedbackRequestId` is
+nullable specifically for this path — the field originally only anticipated
+check-in-triggered catch-ups. This method looks for **any** `Pending`
+`CatchUp` for the Person (from either path) and surfaces it instead of
+creating a duplicate — a rule local to ad-hoc triggering, not a change to
+flagging's own idempotency (which stays per-`FeedbackRequestId`, so flagging
+two *different* check-ins for the same Person still creates two separate
+`CatchUp` rows). An ad-hoc `CatchUp` already pending never suppresses a later
+4-week check-in's 6-week insert — the two guards are independent.
+
+`CatchUpService.RecordOutcomeAsync` (`POST /catch-ups/{catchUpId}/outcome`)
+introduced its own service, split off from `FeedbackCycleService` once
+"managing an existing CatchUp" concerns were distinct enough to warrant it —
+same reasoning as `RequestDispatchService`/`PocResponseHistoryService`
+splitting earlier. `CatchUpOutcomeType` (`SixWeekCheckInAdded`,
+`NoActionClosed`, `EscalateFurther`, `Other`) plus `OutcomeNotes`/`RecordedAt`
+— "or free-text equivalent" is satisfied by pairing `Other` with required
+notes, rather than unlimited freeform categories. Three-way auth (matching
+ad-hoc triggering, not flagging). Recording an outcome clears
+`Person.UnderReviewSince` **unless** the outcome is `EscalateFurther` — the
+review isn't over yet in that case. Rejects with `AlreadyRecorded` if the
+`CatchUp` isn't still `Pending`, which — combined with the "any Pending
+catch-up" check above — means a Person whose catch-up was just resolved can
+immediately have a fresh one opened by a new flag or ad-hoc trigger.
+
+`CatchUpService.GetHistoryAsync` (`GET /people/{personId}/catch-ups`) is a
+Person's full flag/ad-hoc-review/catch-up-outcome history, most-recent-first,
+same three-way scoping and "empty list is a normal Success" precedent as POC
+response history. `UnderReviewSince` is surfaced at the top level (not just
+inferred from entries) so an active review is trivially distinguishable from
+resolved history. `CatchUpResponse` has a computed `TriggerSource`
+(`CheckIn`/`AdHoc`, derived from whether `FeedbackRequestId` is set).
+
+**Dashboard:** the dashboard shell and a dev-only sign-in (see "Auth" above)
+had to exist before any dashboard section could land — the frontend had no
+concept of "who is signed in" before this (everything earlier was either
+backend-only or the unauthenticated guest flow). `DashboardLayout` +
+`RequireCurrentPerson` are the shell and route guard every dashboard screen
+mounts inside; `/` redirects to `/dashboard`. `OrgTreePage`
+(`/dashboard/org-tree`) is pure frontend wiring over the already-role-scoped
+`GET /org-tree` — no duplicate tree implementation.
+
+`OutstandingRequestsPage`/`GET /dashboard/outstanding-requests`
+(`DashboardService`) needed a genuinely new aggregate query — nothing before
+it listed outstanding requests across more than one Person/POC/Project at a
+time. `PersonAuthorizationHelpers.GetVisiblePersonIdsAsync` (the
+union-of-visible-Person-ids scoping: Admin no filter, Practice Lead own
+practice, Line Manager self + direct reports) was extracted here once it
+became a *third* occurrence (after the org tree and POC response patterns) —
+both existing call sites were mechanically refactored onto it in the same PR
+with no behaviour change. "Outstanding" means the live-computed POC status
+isn't `Submitted`. Grouping "by cycle" is a frontend concern — every entry
+already carries `Stage`, so the page groups client-side rather than adding a
+per-stage backend endpoint. The manual reminder action reuses the existing
+remind endpoint.
+
+`FlaggedPeoplePage`/`GET /dashboard/flagged-people`
+(`DashboardService.GetFlaggedPeopleAsync`) is deliberately keyed off "has a
+`Pending` `CatchUp`", not `Person.UnderReviewSince != null` — the two can
+diverge: after an `EscalateFurther` outcome, `UnderReviewSince` stays set but
+that `CatchUp`'s own `Status` becomes `Recorded`, so the Person correctly
+stops appearing here until a fresh flag or ad-hoc trigger opens a new
+`CatchUp`. Uses the same `GetVisiblePersonIdsAsync` scoping.
+`CatchUpOutcomePage` (`/dashboard/people/{personId}/catch-up`) is the
+navigation target flagging a Person leads to — it shows the Person's full
+catch-up history with a form (only for the currently `Pending` entry)
+mirroring the backend's own validation (`Other` requires notes, shown as an
+inline `role="alert"` rather than a disabled submit button, matching
+`FeedbackForm`'s accessibility precedent above).
+
+`POST /people/{id}/roles` and `DELETE /people/{id}/roles/{roleName}`
+assign/remove one of the fixed Role names on a Person. Assigning `Practice
+Lead` requires a `PracticeId` and sets that `Practice`'s `PracticeLeadId`;
+removing the role clears `PracticeLeadId` on every Practice the Person leads.
+Re-assigning a role a Person already holds is rejected — left for a future
+story.
+
+**Admin Console:** added once the dashboard was actually clicked through in a
+browser — there was no frontend anywhere for creating or editing a
+Department, Practice, Person, Project, or POC (all backend-API-only since
+Milestones 3/4). This is permanent, essential functionality, not throwaway
+test tooling: AD SSO will authenticate people, but it will never supply
+org/people/project data, so this application always has to be where that
+data is entered and maintained. `DashboardLayout`'s nav gained an "Admin"
+section, shown only when the signed-in person holds the `Admin` role (a
+client-side UX nicety — real enforcement stays server-side). The specific
+screens (`DepartmentsPage`, `PeoplePage`/`PersonDetailPage`,
+`ProjectsPage`/`ProjectDetailPage`) are described alongside their backing
+data above. All the write actions the Admin Console screens use already
+existed on the backend — building these pages was new reads plus frontend
+wiring, not new backend behaviour, except where noted.
+
+**Admin Settings:** `AppSettings` is a single, lazily-created singleton row
+(one per database, created with defaults the first time
+`AdminSettingsService.GetAsync`/`UpdateAsync` runs against an empty table,
+rather than a migration-time seed) covering every value that used to live in
+a hardcoded default or an interim `IOptions<T>` placeholder
+(`NewStarterCycleOptions`, `GeneralCycleOptions`, `RequestDispatchOptions`).
+`GET`/`PUT /admin/settings` (`SettingsPage` at `/dashboard/admin/settings`) is
+Admin-only, with baseline validation (no empty/negative values) plus a
+strictly-increasing-intervals rule for the New Starter schedule (mirrored
+client-side for immediate feedback, server is the authoritative guard).
+`SettingsPage` groups fields into three sections (Cycle Scheduling,
+Notifications, POC Requirements) purely for display — the API has one flat
+row to read/write, matching every other full-field-set `PUT` convention here.
+
+Each consuming service (`ProjectService` for the New Starter interval,
+`FeedbackCycleService` for the FY-quarter skip threshold, `RequestDispatchService`
+for the automatic/manual toggle, and `PocRoleHelpers`/`AdminSettingsService
+.ToPocRoleTargets` for POC role-count targets) was switched over to read from
+`AdminSettingsService` one at a time, each deleting its now-unused
+`IOptions<T>` placeholder and `Program.cs` registration. "Already-scheduled
+requests are unaffected by a later setting change" holds structurally
+throughout: each setting is read once, at the moment it's needed (a Person
+joining, an enrolment happening, a dispatch pass running), and baked onto the
+resulting rows — there's no live re-read that could retroactively drift. The
+POC role-count switch-over changed the *meaning* of "missing" from "zero
+representatives of this role" to "fewer than the Admin-configured target
+count," which had no prior `IOptions<T>` to delete (the old "exactly one of
+each" default was an implicit assumption baked into a single-argument method
+signature, not a named config class).
+
+Every integration test that constructed one of these services directly with
+an `Options.Create(...)` now passes `new AdminSettingsService(context)`
+instead — a mechanical swap across roughly 20 call sites (see "Known test
+brittleness" below for why this kind of change is expensive here and the
+planned fix).
+
+**Data Protection & Audit:** `AuditLogEntry` (`GET /audit-log`, `AuditLogPage`
+at `/dashboard/admin/audit-log`, Admin-only) is the immutable "who
+viewed/exported whose feedback, when" trail. It deliberately carries no
+reference to any specific `FeedbackSubmission` — only `ViewerId`/`PersonId`/
+`Action`/`OccurredAt` — so an entry survives intact once the retention job
+(below) removes the feedback content it once referred to. `AuditLogService`
+only ever inserts (`RecordViewAsync`/`RecordExportAsync`); there's no
+update/delete, the same immutability-by-omission precedent as
+`FeedbackSubmission`. `GetLogAsync` combines its four optional filters
+(Person, viewer, from, to) with AND. **`RecordViewAsync`/`RecordExportAsync`
+currently have no caller anywhere in the codebase** — no endpoint today
+exposes a Person's actual feedback content to an internal viewer (only
+aggregate status), and the only planned mechanism for seeing content is the
+not-yet-built PDF export (CBLT-247), which is expected to be their first
+caller. This mirrors the earlier "ship the hook first" pattern from the cycle
+engine — intentional, but worth re-confirming CBLT-247 is still tracked so
+this doesn't rot as unreferenced dead code.
+
+`Person.LeaverSince` (nullable `DateTimeOffset`, set once when
+`PersonService.MarkAsLeaverForViewerAsync` flips `Status` to `Leaver`, never
+cleared) is the strict anchor for a 6-month retention clock.
+`LeaverRetentionService.PurgeExpiredLeaversAsync` finds every Leaver whose
+`LeaverSince` is 6 months or older and, per Person, hard-deletes exactly
+three kinds of row scoped to their `ProjectMembership`s: `MagicLink`s
+(deleted first — `PocId` is a Restrict FK to `Poc`, so these must go before
+the `Poc` rows they reference), `FeedbackSubmission`s (cascades to any
+`LmNotification` outbox row), and `Poc`s. The Person row, their
+`ProjectMembership`s, and `FeedbackRequest` scheduling metadata are
+deliberately untouched — none of it is feedback-related personal data.
+`LeaverRetentionBackgroundService` follows the same `BackgroundService` +
+`IServiceScopeFactory` shape as the other background jobs (not registered in
+"Testing"), but polls daily rather than every minute, appropriate to a
+6-month-resolution job; it also runs once immediately on startup, before its
+first delay. Tested against the service directly with a `FakeTimeProvider`.
+
+**Export & Anonymisation:** `Domain/FeedbackAnonymiser.cs` is the core content
+transform — pure logic, no EF Core, no HTTP, tested entirely in
+`CheckPoint.Api.UnitTests`. `IdentifiedFeedbackEntry` (the input) is
+deliberately not the `FeedbackSubmission` entity itself, so the transform has
+zero database dependency and stays reusable by any future anonymised view —
+`Anonymise` is a plain static method over `IEnumerable<IdentifiedFeedbackEntry>`.
+`AnonymisedFeedbackEntry` (the output) has no name/email/role property at
+all, so there's nothing for a careless caller to accidentally forward — a
+stronger guarantee than filtering fields at the call site. Ordering is
+derived purely from the content itself (never submission time or POC list
+position), satisfying both "no correlation clue back to a respondent" and
+"deterministic given the same input." **Not yet wired to any endpoint** —
+same status as the audit-log hooks above, waiting on CBLT-247 (PDF export) as
+its first caller.
+
+## Known test brittleness — planned fix
+
+The integration test suite (`api/CheckPoint.Api.IntegrationTests`) has no
+shared fixture: every test file independently boots its own
+`PostgreSqlContainer` and defines its own `CreateContext()`/`CreateClient
+(personId)` helper. This is why settings/serialization changes (like the
+`AdminSettingsService` switch-over above, or the enum-as-string fix below)
+require mechanically touching 20-70 call sites rather than one shared place —
+and why that kind of change has twice caused a follow-up fix commit for a
+missed call site. The frontend test suite has the same shape: no shared
+`test-utils`, every `*.test.tsx` hand-rolls its own router/auth-stub
+wrapper. Planned fix: a shared `IntegrationTestBase` (container lifecycle,
+`CreateContext`/`CreateClient`, a JSON-aware HTTP client wrapper) on the
+backend, and a `web/src/testUtils.tsx` render helper on the frontend —
+migrate the highest-churn files first, the rest opportunistically.
+
+## Notable past bugs
+
+- **Enums serialized as raw integers, not strings** (found smoke-testing the
+  Admin Console's POC form): the API never configured a
+  `JsonStringEnumConverter`, so every enum silently serialized as its
+  underlying integer even though every frontend TypeScript comparison assumed
+  the member's name as a string. Nothing caught it because frontend unit
+  tests stub `fetch` with hand-written JSON that already used the intended
+  string values — only a real browser round-trip exposed it. Fixed with one
+  line in `Program.cs` (`ConfigureHttpJsonOptions` + `JsonStringEnumConverter`,
+  `allowIntegerValues: true` so old numeric request bodies still work).
+  `api/CheckPoint.Api.IntegrationTests/JsonTestOptions.cs` mirrors this on the
+  test side, since `HttpClient.ReadFromJsonAsync<T>()` has no way to pick up
+  the server's own JSON options automatically.
+- **No CORS configuration** (found testing dev seed data end-to-end in a
+  browser): the frontend and API have always been served from different
+  origins, but every frontend test stubs `fetch` directly rather than
+  exercising real browser CORS enforcement, so this went unnoticed through
+  the whole guest flow and dashboard. Fixed with `AddCors()`/`UseCors()` in
+  `Program.cs`, allowing exactly `FrontendOptions.BaseUrl` with any
+  header/method (covers both plain guest requests and `authorizedFetch`'s
+  custom `DevPersonId` header). Registered unconditionally, not gated to
+  Development, since the deployed environment will need it too once frontend
+  and API are on separate hosts.
+
+Both bugs share a root cause worth remembering for future work: frontend unit
+tests stub `fetch` and never touch a real API, so contract mismatches between
+frontend expectations and actual API behaviour (serialization shape, CORS,
+headers) only surface via a manual browser click-through, not automated
+tests.

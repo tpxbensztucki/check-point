@@ -1,7 +1,6 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../auth/currentPerson'
+import { screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { renderAsUser, resetFetchStub, stubFetch } from '../testUtils'
 import type { FlaggedPersonEntry } from '../api'
 import FlaggedPeoplePage from './FlaggedPeoplePage'
 
@@ -23,30 +22,16 @@ const ENTRIES: FlaggedPersonEntry[] = [
 ]
 
 function renderPage(entries: FlaggedPersonEntry[]) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(JSON.stringify(entries), { status: 200 })) as unknown as typeof fetch,
-  )
+  stubFetch(async () => new Response(JSON.stringify(entries), { status: 200 }))
 
-  return render(
-    <MemoryRouter initialEntries={['/dashboard/flagged-people']}>
-      <Routes>
-        <Route path="/dashboard/flagged-people" element={<FlaggedPeoplePage />} />
-        <Route path="/dashboard/people/:personId/catch-up" element={<p>Catch-up outcome page</p>} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  return renderAsUser(<FlaggedPeoplePage />, {
+    path: '/dashboard/flagged-people',
+    routes: [{ path: '/dashboard/people/:personId/catch-up', element: <p>Catch-up outcome page</p> }],
+  })
 }
 
 describe('FlaggedPeoplePage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('renders every flagged person with their trigger source', async () => {
     renderPage(ENTRIES)

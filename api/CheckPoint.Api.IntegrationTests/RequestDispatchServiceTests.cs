@@ -2,29 +2,22 @@ using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
 // Exercises CBLT-234 directly against RequestDispatchService, the same style as
 // FeedbackCycleServiceTests, since a due FeedbackRequest needs a real
 // ProjectMembership/Poc/Person chain rather than a bare Guid.
-public class RequestDispatchServiceTests : IAsyncLifetime
+public class RequestDispatchServiceTests : IntegrationTestBase
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
-    private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
     private Guid _projectId;
     private Guid _practiceId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await base.InitializeAsync();
 
         await using var context = CreateContext();
-        await context.Database.MigrateAsync();
-
         var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
         context.Practices.Add(practice);
         var project = new Project { Name = "Website Revamp" };
@@ -35,24 +28,8 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         _projectId = project.Id;
     }
 
-    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
-
-    private CheckPointDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<CheckPointDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
-            .Options;
-        return new CheckPointDbContext(options);
-    }
-
     private RequestDispatchService CreateService(CheckPointDbContext context, RecordingEmailSender emailSender) =>
-        new(
-            context,
-            _time,
-            emailSender,
-            new MagicLinkService(context, _time),
-            new AdminSettingsService(context),
-            Options.Create(new FrontendOptions()));
+        CreateDispatchService(context, emailSender);
 
     // Schedules a New Starter cycle (via ProjectService, same as
     // FeedbackCycleServiceTests) and returns the id of its 2-week request, whose
@@ -64,7 +41,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         context.People.Add(person);
         await context.SaveChangesAsync();
 
-        var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+        var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
 
         var request = await context.FeedbackRequests.SingleAsync(
@@ -96,7 +73,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         var (personId, requestId) = await ScheduleRequestAsync();
         await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
         await AddPocAsync(personId, "Casey External", "casey@client.example.com", PocRelationship.External);
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
 
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
@@ -116,7 +93,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         await using var verify = CreateContext();
         foreach (var token in tokens)
         {
-            var result = await new MagicLinkService(verify, _time).ValidateAsync(token);
+            var result = await new MagicLinkService(verify, Time).ValidateAsync(token);
             Assert.Equal(MagicLinkValidationStatus.Valid, result.Status);
             Assert.Equal(requestId, result.FeedbackRequestId);
         }
@@ -148,7 +125,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
     {
         var (personId, requestId) = await ScheduleRequestAsync();
         await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
 
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
@@ -174,7 +151,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
     {
         var (personId, requestId) = await ScheduleRequestAsync();
         await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
 
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
@@ -205,7 +182,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
     public async Task ADueRequestWithNoPocsAssigned_IsLeftScheduledForRetry()
     {
         var (_, requestId) = await ScheduleRequestAsync();
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
 
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
@@ -227,11 +204,11 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+            var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
             await projectService.RemovePersonAsync(_projectId, personId);
         }
 
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
         {
@@ -371,7 +348,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         var newToken = ExtractToken(emailSender.Sent[1]);
         Assert.NotEqual(originalToken, newToken);
 
-        var magicLinkService = new MagicLinkService(context, _time);
+        var magicLinkService = new MagicLinkService(context, Time);
         var originalResult = await magicLinkService.ValidateAsync(originalToken);
         Assert.Equal(MagicLinkValidationStatus.Superseded, originalResult.Status);
 
@@ -416,7 +393,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
         var token = ExtractToken(emailSender.Sent.Single());
 
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         await submissionService.SubmitAsync(token, new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
             "Great work.", "Nothing much.", "Keep it up."));
 
@@ -524,7 +501,7 @@ public class RequestDispatchServiceTests : IAsyncLifetime
         await service.DispatchManuallyAsync(
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
 
         var result = await service.GetPocStatusesAsync(
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
@@ -545,11 +522,11 @@ public class RequestDispatchServiceTests : IAsyncLifetime
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
         var token = ExtractToken(emailSender.Sent.Single());
 
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         await submissionService.SubmitAsync(token, new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
             "Great work.", "Nothing much.", "Keep it up."));
 
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
 
         var result = await dispatchService.GetPocStatusesAsync(
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
@@ -572,14 +549,14 @@ public class RequestDispatchServiceTests : IAsyncLifetime
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
         var submittedEmail = emailSender.Sent.Single(e => e.To == "alex@example.com");
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         await submissionService.SubmitAsync(ExtractToken(submittedEmail), new CheckPoint.Api.Contracts.SubmitFeedbackRequest(
             "Great work.", "Nothing much.", "Keep it up."));
 
         // Advance past expiry for everyone; the submitted POC should stay
         // Submitted regardless, and the pending one gets a reminder (fresh
         // link, fresh expiry) so it stays Sent instead of falling to NoResponse.
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
         await dispatchService.SendReminderAsync(
             requestId, pendingPocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
@@ -600,11 +577,11 @@ public class RequestDispatchServiceTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+            var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
             await projectService.RemovePersonAsync(_projectId, personId);
         }
 
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
         {

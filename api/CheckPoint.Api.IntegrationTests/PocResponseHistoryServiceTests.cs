@@ -2,9 +2,6 @@ using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
@@ -12,20 +9,16 @@ namespace CheckPoint.Api.IntegrationTests;
 // style as RequestDispatchServiceTests, since a cross-request history needs
 // several real FeedbackRequests sharing one ProjectMembership/Poc rather than
 // a bare Guid.
-public class PocResponseHistoryServiceTests : IAsyncLifetime
+public class PocResponseHistoryServiceTests : IntegrationTestBase
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
-    private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
     private Guid _projectId;
     private Guid _practiceId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await base.InitializeAsync();
 
         await using var context = CreateContext();
-        await context.Database.MigrateAsync();
-
         var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
         context.Practices.Add(practice);
         var project = new Project { Name = "Website Revamp" };
@@ -36,26 +29,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         _projectId = project.Id;
     }
 
-    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
-
-    private CheckPointDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<CheckPointDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
-            .Options;
-        return new CheckPointDbContext(options);
-    }
-
-    private PocResponseHistoryService CreateHistoryService(CheckPointDbContext context) => new(context, _time);
-
-    private RequestDispatchService CreateDispatchService(CheckPointDbContext context, RecordingEmailSender emailSender) =>
-        new(
-            context,
-            _time,
-            emailSender,
-            new MagicLinkService(context, _time),
-            new AdminSettingsService(context),
-            Options.Create(new FrontendOptions()));
+    private PocResponseHistoryService CreateHistoryService(CheckPointDbContext context) => new(context, Time);
 
     // Schedules a New Starter cycle (person joins, gets Week2/4/8 requests
     // scheduled) with one Poc assigned from the start.
@@ -66,7 +40,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         context.People.Add(person);
         await context.SaveChangesAsync();
 
-        var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+        var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
 
         var membership = await context.ProjectMemberships.SingleAsync(m => m.ProjectId == _projectId && m.PersonId == person.Id);
@@ -115,8 +89,8 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         // non-invalidated link's token isn't exposed, so submit via a freshly
         // issued one instead (a second link for the same poc/request is fine
         // for test purposes; only one is ever "current").
-        var link = await new MagicLinkService(context, _time).IssueAsync(requestId, pocId);
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var link = await new MagicLinkService(context, Time).IssueAsync(requestId, pocId);
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         var result = await submissionService.SubmitAsync(link.Token, new SubmitFeedbackRequest(
             "Great communication.", "Sometimes misses deadlines.", "Follow up on action items sooner."));
         Assert.Equal(FeedbackSubmissionStatus.Submitted, result.Status);
@@ -133,7 +107,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         await DispatchAsync(week2);
         await DispatchAsync(week4);
         await DispatchAsync(week8);
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
 
         await using var context = CreateContext();
         var result = await CreateHistoryService(context).GetPocHistoryAsync(
@@ -156,7 +130,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
         await DispatchAsync(week2);
         await SubmitViaRequestAsync(week2, pocId);
         await DispatchAsync(week4);
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
 
         await using var context = CreateContext();
         var result = await CreateHistoryService(context).GetPocHistoryAsync(
@@ -231,7 +205,7 @@ public class PocResponseHistoryServiceTests : IAsyncLifetime
 
         var poorWeek2 = await GetRequestIdAsync(poorPersonId, FeedbackRequestStage.NewStarterWeek2);
         await DispatchAsync(poorWeek2);
-        _time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
+        Time.Advance(MagicLinkService.ValidityPeriod + TimeSpan.FromDays(1));
 
         await using var context = CreateContext();
         var result = await CreateHistoryService(context).GetProjectPocPatternsAsync(

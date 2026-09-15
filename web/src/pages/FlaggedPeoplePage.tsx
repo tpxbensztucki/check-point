@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchFlaggedPeople, type FlaggedPersonEntry } from '../api'
-
-type LoadState = { kind: 'loading' } | { kind: 'loaded'; entries: FlaggedPersonEntry[] }
+import { useAsyncData } from '../hooks/useAsyncData'
+import { fetchFlaggedPeople } from '../api'
 
 function formatPending(pendingSince: string): string {
   const ms = Date.now() - new Date(pendingSince).getTime()
@@ -18,20 +16,7 @@ function formatPending(pendingSince: string): string {
 // navigates to CatchUpOutcomePage, where the outcome can actually be
 // recorded (this ticket's own third AC).
 function FlaggedPeoplePage() {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
-
-  useEffect(() => {
-    let cancelled = false
-    fetchFlaggedPeople().then((entries) => {
-      if (!cancelled) {
-        setState({ kind: 'loaded', entries })
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { state } = useAsyncData(fetchFlaggedPeople)
 
   return (
     <div>
@@ -39,13 +24,13 @@ function FlaggedPeoplePage() {
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 
-      {state.kind === 'loaded' && state.entries.length === 0 && (
+      {state.kind === 'loaded' && state.data.length === 0 && (
         <p className="mt-4 text-sm text-gray-500">Nobody is currently under review.</p>
       )}
 
-      {state.kind === 'loaded' && state.entries.length > 0 && (
+      {state.kind === 'loaded' && state.data.length > 0 && (
         <ul className="mt-4 divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
-          {state.entries.map((entry) => (
+          {state.data.map((entry) => (
             <li key={entry.catchUpId}>
               <Link
                 to={`/dashboard/people/${entry.personId}/catch-up`}

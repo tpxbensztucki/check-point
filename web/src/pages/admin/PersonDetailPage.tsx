@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   assignRole,
-  fetchDepartments,
   fetchPeople,
   markAsLeaver,
   removeRole,
   updatePerson,
-  type DepartmentWithPractices,
   type PersonListEntry,
 } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
+import { usePractices } from '../../hooks/usePractices'
 
 const ALL_ROLES = ['Admin', 'Practice Lead', 'Line Manager']
 
@@ -18,10 +17,16 @@ type LoadState = { kind: 'loading' } | { kind: 'loaded'; person: PersonListEntry
 
 // CBLT-306 — edit a Person's fields, manage their Roles, and mark them a
 // Leaver (a one-way transition, matching the existing backend behaviour).
+//
+// Deliberately NOT using useAsyncData for the Person load below (unlike
+// PeoplePage): loading also seeds five separate pieces of local form state
+// as a side effect (fullName, practiceId, ...) — folding that into the
+// hook's fetcher would mean smuggling setState calls into what's supposed
+// to be a pure data fetch, which is worse than just owning the effect here.
 function PersonDetailPage() {
   const { personId } = useParams<{ personId: string }>()
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
-  const [departments, setDepartments] = useState<DepartmentWithPractices[]>([])
+  const allPractices = usePractices()
   const [fullName, setFullName] = useState('')
   const [practiceId, setPracticeId] = useState('')
   const [lineManagerId, setLineManagerId] = useState<string | null>(null)
@@ -49,11 +54,6 @@ function PersonDetailPage() {
   }
 
   useEffect(load, [personId])
-  useEffect(() => {
-    fetchDepartments().then(setDepartments)
-  }, [])
-
-  const allPractices = departments.flatMap((d) => d.practices)
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
