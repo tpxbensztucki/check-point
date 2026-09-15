@@ -20,7 +20,7 @@ function FlaggedPeoplePage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-gray-900">Flagged / Under Review</h1>
+      <h1 className="text-xl font-semibold text-ink">Flagged / Under Review</h1>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAdminSettings, updateAdminSettings, type AdminSettings } from '../../adminApi'
+import Button from '../../components/ui/Button'
+import StatusMessage from '../../components/ui/StatusMessage'
 
 type LoadState =
   | { kind: 'loading' }
@@ -167,16 +169,12 @@ function SettingsPage() {
           </div>
         </fieldset>
 
-        {error && (
-          <p role="alert" className="text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        {saved && <p className="text-sm text-green-700">Saved.</p>}
+        {error && <StatusMessage tone="danger">{error}</StatusMessage>}
+        {saved && <StatusMessage tone="success">Saved.</StatusMessage>}
 
-        <button type="submit" className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white">
+        <Button variant="primary" type="submit" className="px-3 py-2">
           Save settings
-        </button>
+        </Button>
       </form>
     </div>
   )

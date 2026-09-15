@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createPerson, fetchPeople } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
+import Badge from '../../components/ui/Badge'
+import Button from '../../components/ui/Button'
+import StatusMessage from '../../components/ui/StatusMessage'
+import { PERSON_STATUS_TONE } from '../../components/ui/statusColors'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { usePractices } from '../../hooks/usePractices'
 
@@ -47,9 +51,9 @@ function PeoplePage() {
         <h2 className="text-sm font-semibold text-gray-700">New Person</h2>
 
         {error && (
-          <p role="alert" className="mt-2 rounded-md bg-red-50 p-2 text-sm text-red-700">
-            {error}
-          </p>
+          <div className="mt-2">
+            <StatusMessage tone="danger">{error}</StatusMessage>
+          </div>
         )}
 
         <label htmlFor="person-full-name" className="mt-3 block text-sm font-medium text-gray-700">
@@ -99,9 +103,9 @@ function PeoplePage() {
           className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
         />
 
-        <button type="submit" className="mt-4 rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white">
+        <Button variant="primary" type="submit" className="mt-4">
           Add person
-        </button>
+        </Button>
       </form>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
@@ -127,7 +131,9 @@ function PeoplePage() {
                     </Link>
                   </td>
                   <td className="px-3 py-2">{person.practiceName}</td>
-                  <td className="px-3 py-2">{person.status}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={PERSON_STATUS_TONE[person.status]}>{person.status}</Badge>
+                  </td>
                   <td className="px-3 py-2">{person.roles.join(', ') || '—'}</td>
                   <td className="px-3 py-2">{person.lineManagerName ?? '—'}</td>
                 </tr>

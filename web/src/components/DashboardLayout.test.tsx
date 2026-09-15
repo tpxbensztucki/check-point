@@ -12,6 +12,7 @@ function renderLayout() {
         <Route path="/sign-in" element={<p>Sign-in page</p>} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<p>Home section</p>} />
+          <Route path="admin/departments" element={<p>Departments page</p>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -50,16 +51,36 @@ describe('DashboardLayout', () => {
     expect(getCurrentPerson()).toBeNull()
   })
 
-  it('shows the Admin nav section for a person holding the Admin role', () => {
+  it('shows the Admin nav submenu for a person holding the Admin role, revealing its links on open', async () => {
+    const user = userEvent.setup()
     renderLayout()
 
-    expect(screen.getByRole('link', { name: /admin: departments/i })).toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: /admin/i })
+    expect(screen.queryByRole('link', { name: /departments/i })).not.toBeInTheDocument()
+
+    await user.click(trigger)
+
+    expect(screen.getByRole('link', { name: /departments/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /people/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /projects/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /audit log/i })).toBeInTheDocument()
   })
 
-  it('hides the Admin nav section for a person without the Admin role', () => {
+  it('closes the Admin submenu when a link is selected', async () => {
+    const user = userEvent.setup()
+    renderLayout()
+
+    await user.click(screen.getByRole('button', { name: /admin/i }))
+    await user.click(screen.getByRole('link', { name: /departments/i }))
+
+    expect(screen.queryByRole('link', { name: /departments/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the Admin nav trigger for a person without the Admin role', () => {
     setCurrentPerson({ id: 'p2', fullName: 'Lee Lead', roles: ['Practice Lead'] })
     renderLayout()
 
-    expect(screen.queryByRole('link', { name: /admin: departments/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /admin/i })).not.toBeInTheDocument()
   })
 })

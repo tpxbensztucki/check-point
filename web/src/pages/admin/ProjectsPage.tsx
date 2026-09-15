@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { completeProject, createProject, fetchProjects, type Project } from '../../adminApi'
+import Badge from '../../components/ui/Badge'
+import Button from '../../components/ui/Button'
+import { PROJECT_STATUS_TONE } from '../../components/ui/statusColors'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; projects: Project[] }
 
@@ -53,9 +56,9 @@ function ProjectsPage() {
           placeholder="New project name…"
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
-        <button type="submit" className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white whitespace-nowrap">
+        <Button variant="primary" type="submit" className="px-3 py-2">
           Add project
-        </button>
+        </Button>
       </form>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
@@ -78,16 +81,14 @@ function ProjectsPage() {
                       {project.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2">{project.status}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={PROJECT_STATUS_TONE[project.status]}>{project.status}</Badge>
+                  </td>
                   <td className="px-3 py-2">
                     {project.status === 'Active' && (
-                      <button
-                        type="button"
-                        onClick={() => handleComplete(project.id)}
-                        className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                      >
+                      <Button variant="secondary" onClick={() => handleComplete(project.id)} className="px-2 py-1 text-xs">
                         Complete
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
