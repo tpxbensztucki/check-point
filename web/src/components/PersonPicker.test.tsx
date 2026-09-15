@@ -39,46 +39,43 @@ describe('PersonPicker', () => {
 
   afterEach(resetFetchStub)
 
-  it('filters matches as the search text changes', async () => {
-    const user = userEvent.setup()
+  it('renders every fetched person as a dropdown option, plus a None option', async () => {
     renderAsUser(<PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} />)
 
-    await user.type(screen.getByLabelText(/pick someone/i), 'riley')
-
-    expect(await screen.findByText('Riley Report')).toBeInTheDocument()
-    expect(screen.queryByText('Ada Admin')).not.toBeInTheDocument()
+    const select = await screen.findByLabelText(/pick someone/i)
+    expect(await screen.findByRole('option', { name: 'Riley Report' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Ada Admin' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'None' })).toBeInTheDocument()
+    expect(select).toHaveValue('')
   })
 
-  it('excludes the given person id from results even when the search text matches them', async () => {
-    const user = userEvent.setup()
+  it('excludes the given person id from the options', async () => {
     renderAsUser(
       <PersonPicker id="picker" label="Pick someone" value={null} onChange={vi.fn()} excludePersonId="p1" />,
     )
 
-    await user.type(screen.getByLabelText(/pick someone/i), 'ada')
-
-    expect(await screen.findByText(/no matches/i)).toBeInTheDocument()
-    expect(screen.queryByText('Ada Admin')).not.toBeInTheDocument()
+    await screen.findByRole('option', { name: 'Riley Report' })
+    expect(screen.queryByRole('option', { name: 'Ada Admin' })).not.toBeInTheDocument()
   })
 
-  it('selecting a person calls onChange and shows their name', async () => {
+  it('selecting a person calls onChange with their id', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     renderAsUser(<PersonPicker id="picker" label="Pick someone" value={null} onChange={onChange} />)
 
-    await user.type(screen.getByLabelText(/pick someone/i), 'riley')
-    await user.click(await screen.findByText('Riley Report'))
+    await screen.findByRole('option', { name: 'Riley Report' })
+    await user.selectOptions(screen.getByLabelText(/pick someone/i), 'p2')
 
     expect(onChange).toHaveBeenCalledWith('p2')
   })
 
-  it('clearing a selection calls onChange with null', async () => {
+  it('selecting the None option calls onChange with null', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     renderAsUser(<PersonPicker id="picker" label="Pick someone" value="p2" onChange={onChange} />)
 
-    await screen.findByRole('button', { name: /clear/i })
-    await user.click(screen.getByRole('button', { name: /clear/i }))
+    await screen.findByRole('option', { name: 'Riley Report' })
+    await user.selectOptions(screen.getByLabelText(/pick someone/i), '')
 
     expect(onChange).toHaveBeenCalledWith(null)
   })

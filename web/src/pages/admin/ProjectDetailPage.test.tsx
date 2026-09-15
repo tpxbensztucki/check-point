@@ -78,8 +78,8 @@ describe('ProjectDetailPage', () => {
     await screen.findByText('Riley Report')
     expect(screen.getByRole('button', { name: /^add$/i })).toBeDisabled()
 
-    await user.type(screen.getByLabelText(/add a person/i), 'sam')
-    await user.click(await screen.findByText('Sam Starter'))
+    await screen.findByRole('option', { name: 'Sam Starter' })
+    await user.selectOptions(screen.getByLabelText(/add a person/i), 'p2')
     await user.click(screen.getByRole('button', { name: /^add$/i }))
 
     expect(fetch).toHaveBeenCalledWith(
