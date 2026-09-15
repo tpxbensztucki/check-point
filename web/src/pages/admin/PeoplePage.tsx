@@ -26,13 +26,19 @@ function PeoplePage() {
       return
     }
 
+    // CBLT-327 — Email is now required, not just captured when convenient.
+    if (!form.email.trim() || !form.email.includes('@')) {
+      setError('A valid email is required.')
+      return
+    }
+
     setError(null)
     const success = await createPerson({
       fullName: form.fullName.trim(),
       practiceId: form.practiceId,
       lineManagerId: form.lineManagerId,
       headOfPracticeId: null,
-      email: form.email.trim() || null,
+      email: form.email.trim(),
     })
 
     if (success) {
@@ -93,7 +99,7 @@ function PeoplePage() {
         </div>
 
         <label htmlFor="person-email" className="mt-3 block text-sm font-medium text-gray-700">
-          Email (optional)
+          Email
         </label>
         <input
           id="person-email"
@@ -116,6 +122,7 @@ function PeoplePage() {
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
                 <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Practice</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Roles</th>
@@ -130,6 +137,7 @@ function PeoplePage() {
                       {person.fullName}
                     </Link>
                   </td>
+                  <td className="px-3 py-2">{person.email ?? '—'}</td>
                   <td className="px-3 py-2">{person.practiceName}</td>
                   <td className="px-3 py-2">
                     <Badge tone={PERSON_STATUS_TONE[person.status]}>{person.status}</Badge>

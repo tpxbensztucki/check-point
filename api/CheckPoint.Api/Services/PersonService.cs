@@ -15,6 +15,16 @@ public class PersonService(CheckPointDbContext db, TimeProvider timeProvider)
             return PersonCreationResult.Invalid("FullName is required.");
         }
 
+        // Email became required by CBLT-327 — it's load-bearing for CBLT-235's
+        // per-submission LM notification, and something an Admin should always
+        // be capturing up front rather than as an afterthought. The database
+        // column stays nullable (Person.cs) for back-compat with any
+        // pre-existing rows created before this validation existed.
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+        {
+            return PersonCreationResult.Invalid("A valid Email is required.");
+        }
+
         if (!await db.Practices.AnyAsync(p => p.Id == request.PracticeId, cancellationToken))
         {
             return PersonCreationResult.Invalid($"No Practice found with id {request.PracticeId}.");
@@ -60,6 +70,12 @@ public class PersonService(CheckPointDbContext db, TimeProvider timeProvider)
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             return PersonUpdateResult.Invalid("FullName is required.");
+        }
+
+        // See CreateAsync's equivalent check for why this became required (CBLT-327).
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+        {
+            return PersonUpdateResult.Invalid("A valid Email is required.");
         }
 
         if (request.LineManagerId == personId)

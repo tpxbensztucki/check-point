@@ -46,7 +46,7 @@ public class PersonEndpointsTests : IntegrationTestBase
         using var client = CreateClient(_adminPersonId);
 
         var response = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var person = await response.Content.ReadJsonAsync<PersonResponse>();
@@ -69,7 +69,7 @@ public class PersonEndpointsTests : IntegrationTestBase
 
         var response = await client.PostAsJsonAsync(
             "/people",
-            new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, _adminPersonId));
+            new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, _adminPersonId, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var person = await response.Content.ReadJsonAsync<PersonResponse>();
@@ -83,7 +83,7 @@ public class PersonEndpointsTests : IntegrationTestBase
         using var client = CreateClient(_adminPersonId);
 
         var response = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -94,7 +94,7 @@ public class PersonEndpointsTests : IntegrationTestBase
         using var client = CreateClient(_adminPersonId);
 
         var response = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, Guid.NewGuid(), null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, Guid.NewGuid(), null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -104,7 +104,7 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var client = CreateClient(_adminPersonId);
         var createResponse = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, null, "jamie@example.com"));
         var created = await createResponse.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.GetAsync("/people");
@@ -137,7 +137,7 @@ public class PersonEndpointsTests : IntegrationTestBase
         using var client = CreateClient(_nonAdminPersonId);
 
         var response = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -148,7 +148,7 @@ public class PersonEndpointsTests : IntegrationTestBase
         using var client = CreateClient();
 
         var response = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -158,12 +158,12 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
-            new UpdatePersonRequest("Jamie Renamed", _practiceId, _adminPersonId, _adminPersonId));
+            new UpdatePersonRequest("Jamie Renamed", _practiceId, _adminPersonId, _adminPersonId, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var updated = await response.Content.ReadJsonAsync<PersonResponse>();
@@ -173,20 +173,50 @@ public class PersonEndpointsTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task EmailIsOptionalAndRoundTripsThroughCreateAndUpdate()
+    public async Task EmailRoundTripsThroughCreateAndUpdate()
     {
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
-        Assert.Null(person!.Email);
+        Assert.Equal("jamie@example.com", person!.Email);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person.Id}",
-            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie.renamed@example.com"));
 
         var updated = await response.Content.ReadJsonAsync<PersonResponse>();
-        Assert.Equal("jamie@example.com", updated!.Email);
+        Assert.Equal("jamie.renamed@example.com", updated!.Email);
+    }
+
+    // CBLT-327 — Email became a required field (previously optional, CBLT-303).
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not-an-email")]
+    public async Task PersonCannotBeCreatedWithoutAValidEmail(string? email)
+    {
+        using var client = CreateClient(_adminPersonId);
+
+        var response = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, email));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PersonCannotBeEditedToRemoveTheirEmail()
+    {
+        using var client = CreateClient(_adminPersonId);
+        var created = await client.PostAsJsonAsync(
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
+
+        var response = await client.PutAsJsonAsync(
+            $"/people/{person!.Id}",
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -194,12 +224,12 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
-            new UpdatePersonRequest("Jamie Newhire", _practiceId, person.Id, null));
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, person.Id, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -211,7 +241,7 @@ public class PersonEndpointsTests : IntegrationTestBase
 
         var response = await client.PutAsJsonAsync(
             $"/people/{Guid.NewGuid()}",
-            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -221,12 +251,12 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
-            new UpdatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null));
+            new UpdatePersonRequest("Jamie Newhire", Guid.NewGuid(), null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -236,13 +266,13 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         using var client = CreateClient(_nonAdminPersonId);
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
-            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -252,13 +282,13 @@ public class PersonEndpointsTests : IntegrationTestBase
     {
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
-            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
         var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         using var client = CreateClient();
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
-            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null));
+            new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

@@ -66,7 +66,9 @@ export interface PersonFormValues {
   practiceId: string
   lineManagerId: string | null
   headOfPracticeId: string | null
-  email: string | null
+  // Required since CBLT-327 — PersonListEntry.email stays nullable for
+  // reading pre-existing rows, but every write now requires a real value.
+  email: string
 }
 
 // GET /people (CBLT-306) — the first flat browse view over every Person;

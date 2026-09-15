@@ -85,11 +85,41 @@ describe('PeoplePage', () => {
     await screen.findByRole('link', { name: 'Riley Report' })
     await user.type(screen.getByLabelText(/full name/i), 'Sam Starter')
     await user.selectOptions(screen.getByLabelText(/practice/i), 'prac-1')
+    await user.type(screen.getByLabelText(/^email$/i), 'sam@example.com')
     await user.click(screen.getByRole('button', { name: /add person/i }))
 
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/people'),
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  // CBLT-327 — Email became a required field.
+  it('requires a valid email before submitting', async () => {
+    stubPeopleFetch()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByRole('link', { name: 'Riley Report' })
+    await user.type(screen.getByLabelText(/full name/i), 'Sam Starter')
+    await user.selectOptions(screen.getByLabelText(/practice/i), 'prac-1')
+    await user.click(screen.getByRole('button', { name: /add person/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/valid email is required/i)
+  })
+
+  it('shows each person\'s email in the table', async () => {
+    stubFetch(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url.includes('/departments')) {
+        return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
+      }
+      return new Response(JSON.stringify([{ ...PEOPLE[0], email: 'riley@example.com' }]), { status: 200 })
+    })
+    renderPage()
+
+    const link = await screen.findByRole('link', { name: 'Riley Report' })
+    const row = link.closest('tr')!
+    expect(within(row).getByText('riley@example.com')).toBeInTheDocument()
   })
 })
