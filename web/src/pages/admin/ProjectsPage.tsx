@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { completeProject, createProject, fetchProjects, type Project } from '../../adminApi'
+import { completeProject, createProject, fetchProjects, type Project, type ProjectStatus } from '../../adminApi'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import FilterBar from '../../components/ui/FilterBar'
 import SortableHeader from '../../components/ui/SortableHeader'
 import { PROJECT_STATUS_TONE } from '../../components/ui/statusColors'
 import { useSort } from '../../hooks/useSort'
@@ -21,11 +22,39 @@ const SORT_ACCESSORS: Record<SortKey, (p: Project) => string> = {
 function ProjectsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [newProjectName, setNewProjectName] = useState('')
-  const { sorted, sortKey, direction, toggleSort } = useSort<Project, SortKey>(
-    state.kind === 'loaded' ? state.projects : [],
-    SORT_ACCESSORS,
-    'name',
-  )
+
+  // CBLT-323 — filters, applied via Search rather than live.
+  const [searchInput, setSearchInput] = useState('')
+  const [statusInput, setStatusInput] = useState<ProjectStatus | ''>('')
+  const [appliedFilters, setAppliedFilters] = useState({ search: '', status: '' as ProjectStatus | '' })
+
+  function handleSearch() {
+    setAppliedFilters({ search: searchInput.trim(), status: statusInput })
+  }
+
+  function handleClearFilters() {
+    setSearchInput('')
+    setStatusInput('')
+    setAppliedFilters({ search: '', status: '' })
+  }
+
+  const filtered = useMemo(() => {
+    if (state.kind !== 'loaded') {
+      return []
+    }
+
+    return state.projects.filter((p) => {
+      if (appliedFilters.search && !p.name.toLowerCase().includes(appliedFilters.search.toLowerCase())) {
+        return false
+      }
+      if (appliedFilters.status && p.status !== appliedFilters.status) {
+        return false
+      }
+      return true
+    })
+  }, [state, appliedFilters])
+
+  const { sorted, sortKey, direction, toggleSort } = useSort<Project, SortKey>(filtered, SORT_ACCESSORS, 'name')
 
   const load = () => {
     fetchProjects().then((projects) => {
@@ -74,6 +103,31 @@ function ProjectsPage() {
           Add project
         </Button>
       </form>
+
+      <FilterBar onSearch={handleSearch} onClear={handleClearFilters}>
+        <label className="text-sm text-gray-700">
+          Search
+          <input
+            type="search"
+            placeholder="Search by name…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="text-sm text-gray-700">
+          Status
+          <select
+            value={statusInput}
+            onChange={(e) => setStatusInput(e.target.value as ProjectStatus | '')}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All</option>
+            <option value="Active">Active</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </label>
+      </FilterBar>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 

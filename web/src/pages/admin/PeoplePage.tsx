@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createPerson, fetchPeople, type PersonListEntry } from '../../adminApi'
+import { createPerson, fetchPeople, type PersonListEntry, type PersonStatus } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import FilterBar from '../../components/ui/FilterBar'
 import SortableHeader from '../../components/ui/SortableHeader'
 import StatusMessage from '../../components/ui/StatusMessage'
 import { PERSON_STATUS_TONE } from '../../components/ui/statusColors'
@@ -28,8 +29,48 @@ function PeoplePage() {
   const allPractices = usePractices()
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState<string | null>(null)
+
+  // CBLT-323 — filters. Pending input state is separate from applied filter
+  // state so filtering only takes effect on the explicit Search action, not
+  // live as the user types.
+  const [searchInput, setSearchInput] = useState('')
+  const [practiceInput, setPracticeInput] = useState('')
+  const [statusInput, setStatusInput] = useState<PersonStatus | ''>('')
+  const [appliedFilters, setAppliedFilters] = useState({ search: '', practiceId: '', status: '' as PersonStatus | '' })
+
+  function handleSearch() {
+    setAppliedFilters({ search: searchInput.trim(), practiceId: practiceInput, status: statusInput })
+  }
+
+  function handleClearFilters() {
+    setSearchInput('')
+    setPracticeInput('')
+    setStatusInput('')
+    setAppliedFilters({ search: '', practiceId: '', status: '' })
+  }
+
+  const filtered = useMemo(() => {
+    if (state.kind !== 'loaded') {
+      return []
+    }
+
+    return state.data.filter((p) => {
+      if (appliedFilters.search && !p.fullName.toLowerCase().includes(appliedFilters.search.toLowerCase())) {
+        return false
+      }
+      if (appliedFilters.practiceId && p.practiceId !== appliedFilters.practiceId) {
+        return false
+      }
+      if (appliedFilters.status && p.status !== appliedFilters.status) {
+        return false
+      }
+      return true
+    })
+  }, [state, appliedFilters])
+
+  // Filter narrows the set, then sort orders the result (CBLT-322/323).
   const { sorted, sortKey, direction, toggleSort } = useSort<PersonListEntry, SortKey>(
-    state.kind === 'loaded' ? state.data : [],
+    filtered,
     SORT_ACCESSORS,
     'fullName',
   )
@@ -128,6 +169,46 @@ function PeoplePage() {
           Add person
         </Button>
       </form>
+
+      <FilterBar onSearch={handleSearch} onClear={handleClearFilters}>
+        <label className="text-sm text-gray-700">
+          Search
+          <input
+            type="search"
+            placeholder="Search by name…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="text-sm text-gray-700">
+          Filter by practice
+          <select
+            value={practiceInput}
+            onChange={(e) => setPracticeInput(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All</option>
+            {allPractices.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-gray-700">
+          Status
+          <select
+            value={statusInput}
+            onChange={(e) => setStatusInput(e.target.value as PersonStatus | '')}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All</option>
+            <option value="Employed">Employed</option>
+            <option value="Leaver">Leaver</option>
+          </select>
+        </label>
+      </FilterBar>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 
