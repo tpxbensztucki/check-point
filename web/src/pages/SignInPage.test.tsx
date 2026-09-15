@@ -34,29 +34,19 @@ describe('SignInPage', () => {
     window.localStorage.clear()
   })
 
-  it('renders every fetched person', async () => {
+  it('renders every fetched person as a dropdown option', async () => {
     renderSignInPage()
 
-    expect(await screen.findByText('Ada Admin')).toBeInTheDocument()
-    expect(screen.getByText('Lee Lead')).toBeInTheDocument()
-  })
-
-  it('filters the list as the search text changes', async () => {
-    const user = userEvent.setup()
-    renderSignInPage()
-
-    await screen.findByText('Ada Admin')
-    await user.type(screen.getByLabelText(/search for a person/i), 'lee')
-
-    expect(screen.queryByText('Ada Admin')).not.toBeInTheDocument()
-    expect(screen.getByText('Lee Lead')).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: /ada admin/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /lee lead/i })).toBeInTheDocument()
   })
 
   it('signing in as a person persists them and navigates to the dashboard', async () => {
     const user = userEvent.setup()
     renderSignInPage()
 
-    await user.click(await screen.findByText('Ada Admin'))
+    await screen.findByRole('option', { name: /ada admin/i })
+    await user.selectOptions(screen.getByLabelText(/select a person/i), 'p1')
 
     expect(await screen.findByText('Dashboard landed')).toBeInTheDocument()
     expect(getCurrentPerson()).toEqual({ id: 'p1', fullName: 'Ada Admin', roles: ['Admin'] })

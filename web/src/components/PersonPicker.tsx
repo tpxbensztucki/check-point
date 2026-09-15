@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchPeople, type PersonListEntry } from '../adminApi'
 
-// A small reusable searchable Person select (CBLT-306), mirroring
-// SignInPage's existing filter-as-you-type pattern. Reused for Line
-// Manager/Head of Practice selection here, and again for adding a Person to
-// a Project (CBLT-307).
+// A small reusable Person select (CBLT-306; converted from a searchable
+// text-filter input to a plain dropdown by CBLT-314 — at this app's
+// department-level scale, per spec Section 14, a dropdown is simpler and
+// more discoverable than type-to-filter). Reused for Line Manager/Head of
+// Practice selection, and again for adding a Person to a Project (CBLT-307).
 function PersonPicker({
   id,
   label,
@@ -19,7 +20,6 @@ function PersonPicker({
   excludePersonId?: string
 }) {
   const [people, setPeople] = useState<PersonListEntry[]>([])
-  const [query, setQuery] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -42,66 +42,31 @@ function PersonPicker({
   }, [])
 
   const options = useMemo(
-    () => people.filter((p) => p.id !== excludePersonId),
+    () =>
+      people
+        .filter((p) => p.id !== excludePersonId)
+        .sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [people, excludePersonId],
   )
-
-  const filtered = useMemo(() => {
-    const lowerQuery = query.trim().toLowerCase()
-    if (!lowerQuery) {
-      return options
-    }
-    return options.filter((p) => p.fullName.toLowerCase().includes(lowerQuery))
-  }, [options, query])
-
-  const selected = options.find((p) => p.id === value)
 
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-medium text-gray-700">
         {label}
       </label>
-      <input
+      <select
         id={id}
-        type="search"
-        placeholder="Search by name…"
-        value={selected ? selected.fullName : query}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          if (value) {
-            onChange(null)
-          }
-        }}
-        className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-      />
-      {!selected && query.trim() && (
-        <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-gray-200 bg-white">
-          {filtered.length === 0 && <li className="px-2 py-1.5 text-sm text-gray-500">No matches.</li>}
-          {filtered.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(p.id)
-                  setQuery('')
-                }}
-                className="block w-full px-2 py-1.5 text-left text-sm hover:bg-gray-50"
-              >
-                {p.fullName}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {selected && (
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className="mt-1 text-xs text-gray-500 underline"
-        >
-          Clear
-        </button>
-      )}
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+      >
+        <option value="">None</option>
+        {options.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.fullName}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

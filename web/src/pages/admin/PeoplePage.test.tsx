@@ -51,8 +51,10 @@ describe('PeoplePage', () => {
     stubPeopleFetch()
     renderPage()
 
-    expect(await screen.findByText('Riley Report')).toBeInTheDocument()
-    const row = screen.getByText('Riley Report').closest('tr')!
+    // "Riley Report" also appears as an option in the Line Manager PersonPicker
+    // dropdown (CBLT-314), so scope this to the table link specifically.
+    const link = await screen.findByRole('link', { name: 'Riley Report' })
+    const row = link.closest('tr')!
     expect(within(row).getByText('Software Engineering')).toBeInTheDocument()
   })
 
@@ -60,8 +62,8 @@ describe('PeoplePage', () => {
     stubPeopleFetch()
     renderPage()
 
-    const link = await screen.findByText('Riley Report')
-    expect(link.closest('a')).toHaveAttribute('href', '/dashboard/admin/people/p1')
+    const link = await screen.findByRole('link', { name: 'Riley Report' })
+    expect(link).toHaveAttribute('href', '/dashboard/admin/people/p1')
   })
 
   it('requires a name and practice before submitting', async () => {
@@ -69,7 +71,7 @@ describe('PeoplePage', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await screen.findByText('Riley Report')
+    await screen.findByRole('link', { name: 'Riley Report' })
     await user.click(screen.getByRole('button', { name: /add person/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/name and practice are required/i)
@@ -80,7 +82,7 @@ describe('PeoplePage', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await screen.findByText('Riley Report')
+    await screen.findByRole('link', { name: 'Riley Report' })
     await user.type(screen.getByLabelText(/full name/i), 'Sam Starter')
     await user.selectOptions(screen.getByLabelText(/practice/i), 'prac-1')
     await user.click(screen.getByRole('button', { name: /add person/i }))
