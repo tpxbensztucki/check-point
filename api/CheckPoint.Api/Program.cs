@@ -47,7 +47,20 @@ builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminSettingsService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<LeaverRetentionService>();
-builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+// No SMTP server exists in any environment this project has run in yet (see
+// SmtpOptions's own doc comment) — outside Production, log instead of
+// attempting a real send (CBLT-317), the same "not Production" gate as
+// DevPersonAuthenticationHandler/DevEndpoints below, so Production's own
+// fail-loudly-with-no-SMTP-configured behaviour (SmtpEmailSender) is
+// completely unchanged.
+if (builder.Environment.IsProduction())
+{
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailSender, DevEmailSender>();
+}
 builder.Services.Configure<FrontendOptions>(
     builder.Configuration.GetSection(FrontendOptions.SectionName));
 builder.Services.Configure<SmtpOptions>(
@@ -123,8 +136,8 @@ using (var scope = app.Services.CreateScope())
         await DevDataSeeder.SeedAsync(
             db,
             scope.ServiceProvider.GetRequiredService<ProjectService>(),
-            scope.ServiceProvider.GetRequiredService<MagicLinkService>(),
             scope.ServiceProvider.GetRequiredService<FeedbackCycleService>(),
+            scope.ServiceProvider.GetRequiredService<RequestDispatchService>(),
             scope.ServiceProvider.GetRequiredService<AuditLogService>(),
             scope.ServiceProvider.GetRequiredService<TimeProvider>());
     }
