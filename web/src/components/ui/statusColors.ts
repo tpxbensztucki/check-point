@@ -24,7 +24,7 @@ export const CATCH_UP_OUTCOME_TONE: Record<CatchUpOutcomeType, BadgeTone> = {
 }
 
 export const PERSON_STATUS_TONE: Record<PersonStatus, BadgeTone> = {
-  Employed: 'neutral',
+  Employed: 'success',
   Leaver: 'neutral',
 }
 
