@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setCurrentPerson } from '../auth/currentPerson'
 import type { OrgPersonNode } from '../api'
@@ -55,7 +56,11 @@ describe('OrgTreePage', () => {
 
   it('renders a nested forest at least two levels deep', async () => {
     stubFetchWith(FOREST)
-    render(<OrgTreePage />)
+    render(
+      <MemoryRouter>
+        <OrgTreePage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText('Ada Admin')).toBeInTheDocument()
     expect(screen.getByText('Lee Lead')).toBeInTheDocument()
@@ -65,8 +70,27 @@ describe('OrgTreePage', () => {
 
   it('shows a "nothing visible" message for an empty forest, not an error', async () => {
     stubFetchWith([])
-    render(<OrgTreePage />)
+    render(
+      <MemoryRouter>
+        <OrgTreePage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText(/no one is visible to you/i)).toBeInTheDocument()
+  })
+
+  it('links each Person\'s name to their profile page', async () => {
+    stubFetchWith(FOREST)
+    render(
+      <MemoryRouter>
+        <OrgTreePage />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByRole('link', { name: 'Ada Admin' })
+    expect(link).toHaveAttribute('href', '/dashboard/people/root')
+
+    const reportLink = screen.getByRole('link', { name: 'Rin Report' })
+    expect(reportLink).toHaveAttribute('href', '/dashboard/people/leaf')
   })
 })

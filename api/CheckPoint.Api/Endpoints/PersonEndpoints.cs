@@ -102,6 +102,30 @@ public static class PersonEndpoints
             };
         });
 
+        // Scoped single-Person profile read backing the new Person-profile
+        // frontend page — Practice Lead and Line Manager have no way to view
+        // a Person at all otherwise, since GET /people above is Admin-only.
+        // Same three-way scoping as the ad-hoc-review route.
+        leaverGroup.MapGet("/{personId:guid}", async (
+            Guid personId, ClaimsPrincipal caller, PersonService service) =>
+        {
+            var callerId = Guid.Parse(caller.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await service.GetForViewerAsync(
+                personId,
+                callerId,
+                caller.IsInRole(RoleNames.Admin),
+                caller.IsInRole(RoleNames.PracticeLead),
+                caller.IsInRole(RoleNames.LineManager));
+
+            return result.Status switch
+            {
+                PersonProfileStatus.Success => Results.Ok(result.Person),
+                PersonProfileStatus.PersonNotFound => Results.NotFound(result.Error),
+                PersonProfileStatus.Forbidden => Results.Forbid(),
+                _ => Results.Problem(),
+            };
+        });
+
         // Three-way, same scoping as the ad-hoc-review route above (spec
         // Section 5.3, CBLT-242: "Admin: all; Practice Lead: own practice; LM:
         // own reports").

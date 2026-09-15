@@ -7,6 +7,7 @@ import FlaggedPeoplePage from './pages/FlaggedPeoplePage'
 import GuestFeedbackPage from './pages/GuestFeedbackPage'
 import OrgTreePage from './pages/OrgTreePage'
 import OutstandingRequestsPage from './pages/OutstandingRequestsPage'
+import PersonProfilePage from './pages/PersonProfilePage'
 import AuditLogPage from './pages/admin/AuditLogPage'
 import DepartmentsPage from './pages/admin/DepartmentsPage'
 import PeoplePage from './pages/admin/PeoplePage'
@@ -30,6 +31,7 @@ function App() {
             <Route path="flagged-people" element={<FlaggedPeoplePage />} />
             <Route path="org-tree" element={<OrgTreePage />} />
             <Route path="people/:personId/catch-up" element={<CatchUpOutcomePage />} />
+            <Route path="people/:personId" element={<PersonProfilePage />} />
             <Route path="admin/departments" element={<DepartmentsPage />} />
             <Route path="admin/people" element={<PeoplePage />} />
             <Route path="admin/people/:personId" element={<PersonDetailPage />} />

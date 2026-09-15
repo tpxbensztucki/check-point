@@ -204,6 +204,83 @@ export async function recordCatchUpOutcome(
   return response.ok
 }
 
+// Mirrors CheckPoint.Api/Contracts/PersonContracts.cs's PersonListEntry —
+// reused as the Person-profile page's view model, same as the backend reuses
+// it for both the Admin-only flat list and this scoped single-Person read.
+export interface PersonProfile {
+  id: string
+  fullName: string
+  status: 'Employed' | 'Leaver'
+  practiceId: string
+  practiceName: string
+  lineManagerId: string | null
+  lineManagerName: string | null
+  headOfPracticeId: string | null
+  roles: string[]
+  email: string | null
+}
+
+export type FetchPersonStatus = 'success' | 'notFound' | 'forbidden' | 'error'
+
+export interface FetchPersonResult {
+  status: FetchPersonStatus
+  person?: PersonProfile
+}
+
+// GET /people/{personId} — the scoped three-way (Admin/Practice Lead/Line
+// Manager) single-Person read backing the Person-profile page. Distinct from
+// GET /people (adminApi.ts's fetchPeople), which is Admin-only.
+export async function fetchPerson(personId: string): Promise<FetchPersonResult> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}`)
+  if (response.ok) {
+    return { status: 'success', person: (await response.json()) as PersonProfile }
+  }
+
+  switch (response.status) {
+    case 404:
+      return { status: 'notFound' }
+    case 403:
+      return { status: 'forbidden' }
+    default:
+      return { status: 'error' }
+  }
+}
+
+export type TriggerAdHocReviewStatus = 'success' | 'notFound' | 'forbidden' | 'error'
+
+export interface TriggerAdHocReviewResult {
+  status: TriggerAdHocReviewStatus
+  catchUp?: CatchUpEntry
+  alreadyPending?: boolean
+}
+
+// POST /people/{personId}/ad-hoc-review (CBLT-240) — three-way authorized
+// server-side (Admin, or the Person's own Line Manager/Practice Lead); a 403
+// here means the current viewer isn't authorized for this specific Person,
+// even though they hold the isAdmin/PL/LM role generally. Mirrors
+// AdHocReviewResponse from Services/AdHocReviewResult.cs, including the
+// alreadyPending flag the backend surfaces instead of erroring on a repeat
+// trigger.
+export async function triggerAdHocReview(personId: string): Promise<TriggerAdHocReviewResult> {
+  const response = await authorizedFetch(`/people/${encodeURIComponent(personId)}/ad-hoc-review`, {
+    method: 'POST',
+  })
+
+  if (response.ok) {
+    const body = (await response.json()) as { catchUp: CatchUpEntry; alreadyPending: boolean }
+    return { status: 'success', catchUp: body.catchUp, alreadyPending: body.alreadyPending }
+  }
+
+  switch (response.status) {
+    case 404:
+      return { status: 'notFound' }
+    case 403:
+      return { status: 'forbidden' }
+    default:
+      return { status: 'error' }
+  }
+}
+
 export type SubmitFeedbackStatus = 'success' | 'expired' | 'alreadyUsed' | 'notFound' | 'invalid' | 'error'
 
 export interface SubmitFeedbackResult {
