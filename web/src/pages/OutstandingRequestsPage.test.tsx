@@ -102,4 +102,46 @@ describe('OutstandingRequestsPage', () => {
 
     expect(await screen.findByText(/nothing outstanding/i)).toBeInTheDocument()
   })
+
+  // CBLT-323 — filters + search, applied via the Search action.
+  it('filters by search text, matching person or project name', async () => {
+    stubFetch(ENTRIES)
+    const user = userEvent.setup()
+    render(<OutstandingRequestsPage />)
+
+    await screen.findByText('Riley Report')
+    await user.type(screen.getByLabelText(/^search$/i), 'Sam')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    expect(screen.queryByText('Riley Report')).not.toBeInTheDocument()
+    expect(screen.getByText('Sam Starter')).toBeInTheDocument()
+  })
+
+  it('filters by POC response status', async () => {
+    stubFetch(ENTRIES)
+    const user = userEvent.setup()
+    render(<OutstandingRequestsPage />)
+
+    await screen.findByText('Riley Report')
+    await user.selectOptions(screen.getByLabelText(/^status$/i), 'NoResponse')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    expect(screen.getByText('Riley Report')).toBeInTheDocument()
+    expect(screen.queryByText('Sam Starter')).not.toBeInTheDocument()
+  })
+
+  it('clears applied filters', async () => {
+    stubFetch(ENTRIES)
+    const user = userEvent.setup()
+    render(<OutstandingRequestsPage />)
+
+    await screen.findByText('Riley Report')
+    await user.type(screen.getByLabelText(/^search$/i), 'Sam')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+    expect(screen.queryByText('Riley Report')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^clear$/i }))
+    expect(screen.getByText('Riley Report')).toBeInTheDocument()
+    expect(screen.getByText('Sam Starter')).toBeInTheDocument()
+  })
 })

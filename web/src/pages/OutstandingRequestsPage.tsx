@@ -7,9 +7,11 @@ import {
 } from '../api'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import FilterBar from '../components/ui/FilterBar'
 import SortableHeader from '../components/ui/SortableHeader'
 import { POC_RESPONSE_STATUS_TONE } from '../components/ui/statusColors'
 import { useSort } from '../hooks/useSort'
+import type { PocResponseStatus } from '../api'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; entries: OutstandingRequestEntry[] }
 
@@ -43,8 +45,62 @@ const STAGE_ORDER: FeedbackRequestStage[] = [
 function OutstandingRequestsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({})
+
+  // CBLT-323 — filters, applied via Search rather than live.
+  const [searchInput, setSearchInput] = useState('')
+  const [projectInput, setProjectInput] = useState('')
+  const [statusInput, setStatusInput] = useState<PocResponseStatus | ''>('')
+  const [appliedFilters, setAppliedFilters] = useState({ search: '', projectId: '', status: '' as PocResponseStatus | '' })
+
+  function handleSearch() {
+    setAppliedFilters({ search: searchInput.trim(), projectId: projectInput, status: statusInput })
+  }
+
+  function handleClearFilters() {
+    setSearchInput('')
+    setProjectInput('')
+    setStatusInput('')
+    setAppliedFilters({ search: '', projectId: '', status: '' })
+  }
+
+  const projectOptions = useMemo(() => {
+    if (state.kind !== 'loaded') {
+      return []
+    }
+
+    const byId = new Map<string, string>()
+    for (const entry of state.entries) {
+      byId.set(entry.projectId, entry.projectName)
+    }
+    return [...byId.entries()].map(([projectId, projectName]) => ({ projectId, projectName })).sort((a, b) => a.projectName.localeCompare(b.projectName))
+  }, [state])
+
+  // Filter narrows the set, then sort orders the result (CBLT-322/323).
+  const filtered = useMemo(() => {
+    if (state.kind !== 'loaded') {
+      return []
+    }
+
+    return state.entries.filter((e) => {
+      if (
+        appliedFilters.search &&
+        !e.personName.toLowerCase().includes(appliedFilters.search.toLowerCase()) &&
+        !e.projectName.toLowerCase().includes(appliedFilters.search.toLowerCase())
+      ) {
+        return false
+      }
+      if (appliedFilters.projectId && e.projectId !== appliedFilters.projectId) {
+        return false
+      }
+      if (appliedFilters.status && e.status !== appliedFilters.status) {
+        return false
+      }
+      return true
+    })
+  }, [state, appliedFilters])
+
   const { sorted, sortKey, direction, toggleSort } = useSort<OutstandingRequestEntry, SortKey>(
-    state.kind === 'loaded' ? state.entries : [],
+    filtered,
     SORT_ACCESSORS,
     'personName',
   )
@@ -78,6 +134,49 @@ function OutstandingRequestsPage() {
   return (
     <div>
       <h1 className="text-xl font-semibold text-gray-900">Outstanding Requests</h1>
+
+      <FilterBar onSearch={handleSearch} onClear={handleClearFilters}>
+        <label className="text-sm text-gray-700">
+          Search
+          <input
+            type="search"
+            placeholder="Search by person or project…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          />
+        </label>
+        <label className="text-sm text-gray-700">
+          Project
+          <select
+            value={projectInput}
+            onChange={(e) => setProjectInput(e.target.value)}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All</option>
+            {projectOptions.map((p) => (
+              <option key={p.projectId} value={p.projectId}>
+                {p.projectName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-gray-700">
+          Status
+          <select
+            value={statusInput}
+            onChange={(e) => setStatusInput(e.target.value as PocResponseStatus | '')}
+            className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All</option>
+            <option value="NotYetSent">Not yet sent</option>
+            <option value="Sent">Sent</option>
+            <option value="Submitted">Submitted</option>
+            <option value="NoResponse">No response</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </label>
+      </FilterBar>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading outstanding requests…</p>}
 
