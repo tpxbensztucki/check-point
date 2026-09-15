@@ -102,7 +102,10 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
         var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
-        Assert.Contains(admin.Id, allNodeIds);
+        // The admin-only caller isn't referenced as anyone's Line Manager here,
+        // so per CBLT-315 they're excluded from the tree entirely — this test
+        // is about the *scope* an Admin viewer gets, not their own presence.
+        Assert.DoesNotContain(admin.Id, allNodeIds);
         Assert.Contains(managerA.Id, allNodeIds);
         Assert.Contains(managerB.Id, allNodeIds);
         Assert.Contains(reportA.Id, allNodeIds);
@@ -278,6 +281,62 @@ public class OrgTreeEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/org-tree");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminOnlyPerson_NotReferencedAsAnyonesLineManager_IsExcludedFromTree()
+    {
+        await using var db = CreateDb();
+        var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        db.Practices.Add(practice);
+        await db.SaveChangesAsync();
+
+        var callerAdmin = new Person { FullName = "Alex CallerAdmin", PracticeId = practice.Id, Roles = [adminRole] };
+        var targetAdmin = new Person { FullName = "Toni TargetAdmin", PracticeId = practice.Id, Roles = [adminRole] };
+        var plainPerson = new Person { FullName = "Pat PlainPerson", PracticeId = practice.Id };
+        db.People.AddRange(callerAdmin, targetAdmin, plainPerson);
+        await db.SaveChangesAsync();
+
+        using var client = CreateClient(callerAdmin.Id);
+        var response = await client.GetAsync("/org-tree");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
+        var allNodeIds = tree!.SelectMany(Flatten).Select(n => n.Id).ToHashSet();
+
+        Assert.DoesNotContain(targetAdmin.Id, allNodeIds);
+        Assert.Contains(plainPerson.Id, allNodeIds);
+    }
+
+    [Fact]
+    public async Task AdminWhoIsSomeonesLineManager_AppearsWithNoRoleTitle()
+    {
+        await using var db = CreateDb();
+        var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
+        var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
+        db.Practices.Add(practice);
+        await db.SaveChangesAsync();
+
+        var callerAdmin = new Person { FullName = "Alex CallerAdmin", PracticeId = practice.Id, Roles = [adminRole] };
+        var targetAdmin = new Person { FullName = "Toni TargetAdmin", PracticeId = practice.Id, Roles = [adminRole] };
+        db.People.AddRange(callerAdmin, targetAdmin);
+        await db.SaveChangesAsync();
+
+        var report = new Person { FullName = "Riley Report", PracticeId = practice.Id, LineManagerId = targetAdmin.Id };
+        db.People.Add(report);
+        await db.SaveChangesAsync();
+
+        using var client = CreateClient(callerAdmin.Id);
+        var response = await client.GetAsync("/org-tree");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tree = await response.Content.ReadFromJsonAsync<List<OrgPersonNode>>(JsonTestOptions.Value);
+
+        var targetAdminNode = FindNode(tree!, targetAdmin.Id);
+        Assert.NotNull(targetAdminNode);
+        Assert.Empty(targetAdminNode!.Roles);
+        Assert.Contains(targetAdminNode.Reports, r => r.Id == report.Id);
     }
 
     [Fact]

@@ -53,7 +53,26 @@ public class OrgTreeService(CheckPointDbContext db)
                 p.LineManagerId == null || p.LineManager!.PracticeId != p.PracticeId))
             .ToListAsync(cancellationToken);
 
-        return BuildForest(people);
+        return BuildForest(FilterOutAdminOnlyNodes(people));
+    }
+
+    // Admin isn't part of the practice hierarchy this tree visualises (spec
+    // Section 2) — a Person holding Admin is hidden entirely unless someone
+    // else in view lists them as their Line Manager, in which case they still
+    // need to appear as that Person's manager node, just with no role title
+    // shown (CBLT-315) rather than surfacing "Admin" in a tree about practice
+    // reporting lines.
+    private static List<PersonNode> FilterOutAdminOnlyNodes(List<PersonNode> people)
+    {
+        var referencedAsLineManagerIds = people
+            .Where(p => p.LineManagerId is not null)
+            .Select(p => p.LineManagerId!.Value)
+            .ToHashSet();
+
+        return people
+            .Where(p => !p.Roles.Contains(RoleNames.Admin) || referencedAsLineManagerIds.Contains(p.Id))
+            .Select(p => p.Roles.Contains(RoleNames.Admin) ? p with { Roles = [] } : p)
+            .ToList();
     }
 
     // A Person's Line Manager may fall outside this viewer's scope (a different
