@@ -236,6 +236,51 @@ public class PersonService(CheckPointDbContext db, TimeProvider timeProvider)
                 p.Email))
             .ToListAsync(cancellationToken);
 
+    // The scoped single-Person counterpart to GetAllAsync — Admin (any
+    // Person), Practice Lead (own practice), or Line Manager (own reports),
+    // same three-way check PersonAuthorizationHelpers already centralises for
+    // PocService/RequestDispatchService/FeedbackCycleService. Backs the new
+    // Person-profile page: PL/LM currently have no way to view a Person at
+    // all, since GET /people is Admin-only.
+    public async Task<PersonProfileResult> GetForViewerAsync(
+        Guid personId,
+        Guid callerId,
+        bool callerIsAdmin,
+        bool callerIsPracticeLead,
+        bool callerIsLineManager,
+        CancellationToken cancellationToken = default)
+    {
+        var person = await db.People.SingleOrDefaultAsync(p => p.Id == personId, cancellationToken);
+        if (person is null)
+        {
+            return PersonProfileResult.PersonNotFound($"No Person found with id {personId}.");
+        }
+
+        var authorized = await PersonAuthorizationHelpers.IsAuthorizedForPersonAsync(
+            db, person, callerId, callerIsAdmin, callerIsPracticeLead, callerIsLineManager, cancellationToken);
+        if (!authorized)
+        {
+            return PersonProfileResult.Forbidden();
+        }
+
+        var entry = await db.People
+            .Where(p => p.Id == personId)
+            .Select(p => new PersonListEntry(
+                p.Id,
+                p.FullName,
+                p.Status,
+                p.PracticeId,
+                p.Practice.Name,
+                p.LineManagerId,
+                p.LineManager != null ? p.LineManager.FullName : null,
+                p.HeadOfPracticeId,
+                p.Roles.Select(r => r.Name).ToList(),
+                p.Email))
+            .SingleAsync(cancellationToken);
+
+        return PersonProfileResult.Success(entry);
+    }
+
     private static PersonResponse ToResponse(Person person) => new(
         person.Id, person.FullName, person.Status, person.PracticeId, person.LineManagerId, person.HeadOfPracticeId, person.Email);
 }

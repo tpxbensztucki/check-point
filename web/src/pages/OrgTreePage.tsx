@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { fetchOrgTree, type OrgPersonNode } from '../api'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; forest: OrgPersonNode[] }
@@ -49,7 +50,9 @@ function OrgTreeNode({ node }: { node: OrgPersonNode }) {
   return (
     <li>
       <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2">
-        <span className="font-medium text-gray-900">{node.fullName}</span>
+        <Link to={`/dashboard/people/${node.id}`} className="font-medium text-gray-900 hover:underline">
+          {node.fullName}
+        </Link>
         <span className="text-xs text-gray-500">{node.status}</span>
         {node.roles.length > 0 && <span className="text-xs text-gray-500">{node.roles.join(', ')}</span>}
         {node.isOrphaned && (

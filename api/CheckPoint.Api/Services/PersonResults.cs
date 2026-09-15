@@ -55,6 +55,24 @@ public record RoleRemovalResult(RoleRemovalStatus Status, PersonRolesResponse? R
         new(RoleRemovalStatus.PersonNotFound, null, error);
 }
 
+// Backs the scoped single-Person profile read (CBLT-240 frontend follow-up) —
+// the three-way (Admin/Practice Lead/Line Manager) equivalent of GetAllAsync's
+// Admin-only flat list, but for exactly one Person. Reuses PersonListEntry
+// since it already carries everything a profile view needs.
+public enum PersonProfileStatus { Success, PersonNotFound, Forbidden }
+
+public record PersonProfileResult(PersonProfileStatus Status, PersonListEntry? Person, string? Error)
+{
+    public static PersonProfileResult Success(PersonListEntry person) =>
+        new(PersonProfileStatus.Success, person, null);
+
+    public static PersonProfileResult PersonNotFound(string error) =>
+        new(PersonProfileStatus.PersonNotFound, null, error);
+
+    public static PersonProfileResult Forbidden() =>
+        new(PersonProfileStatus.Forbidden, null, null);
+}
+
 public enum LeaverTransitionStatus { MarkedAsLeaver, ValidationFailed, PersonNotFound, Forbidden }
 
 public record LeaverTransitionResult(LeaverTransitionStatus Status, PersonResponse? Person, string? Error)
