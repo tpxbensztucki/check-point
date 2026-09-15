@@ -154,4 +154,59 @@ describe('PeoplePage', () => {
     const row = link.closest('tr')!
     expect(within(row).getByText('riley@example.com')).toBeInTheDocument()
   })
+
+  // CBLT-324 — pagination.
+  it('paginates the list and navigates between pages', async () => {
+    const user = userEvent.setup()
+    const people = Array.from({ length: 30 }, (_, i) => ({
+      ...PEOPLE[0],
+      id: `p${i}`,
+      fullName: `Person ${String(i).padStart(2, '0')}`,
+    }))
+    stubFetch(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url.includes('/departments')) {
+        return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
+      }
+      return new Response(JSON.stringify(people), { status: 200 })
+    })
+    renderPage()
+
+    await screen.findByRole('link', { name: 'Person 00' })
+    expect(screen.getAllByRole('link', { name: /^Person \d\d$/ })).toHaveLength(25)
+    expect(screen.getByText(/page 1 of 2/i)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Person 25' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^next$/i }))
+
+    expect(await screen.findByRole('link', { name: 'Person 25' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /^Person \d\d$/ })).toHaveLength(5)
+  })
+
+  it('resets to page 1 when a filter is applied', async () => {
+    const user = userEvent.setup()
+    const people = Array.from({ length: 30 }, (_, i) => ({
+      ...PEOPLE[0],
+      id: `p${i}`,
+      fullName: `Person ${String(i).padStart(2, '0')}`,
+    }))
+    stubFetch(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url.includes('/departments')) {
+        return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
+      }
+      return new Response(JSON.stringify(people), { status: 200 })
+    })
+    renderPage()
+
+    await screen.findByRole('link', { name: 'Person 00' })
+    await user.click(screen.getByRole('button', { name: /^next$/i }))
+    await screen.findByRole('link', { name: 'Person 25' })
+
+    await user.type(screen.getByLabelText(/^search$/i), 'Person 0')
+    await user.click(screen.getByRole('button', { name: /^search$/i }))
+
+    expect(await screen.findByRole('link', { name: 'Person 00' })).toBeInTheDocument()
+    expect(screen.queryByText(/page \d of \d/i)).not.toBeInTheDocument()
+  })
 })
