@@ -24,23 +24,27 @@ namespace CheckPoint.Api;
 //   TriggerAdHocReviewAsync, HandleFeedbackRequestCompletedAsync) are called
 //   directly for flagging/ad-hoc/general-cycle-enrolment states, so the
 //   6-week insert / Under Review / General cycle semantics are exactly what
-//   production code produces rather than hand-approximated.
-// - Everything else (submissions, magic link states, audit log rows) is
-//   hand-inserted, since the real services only ever operate "as of now" and
-//   several of these states need specific historical timestamps.
+//   production code produces rather than hand-approximated. Reminder Remy and
+//   Guest-Ready Gary likewise go through the real
+//   RequestDispatchService.DispatchManuallyAsync/SendReminderAsync (CBLT-317)
+//   rather than hand-set Status/MagicLink rows.
+// - Everything else (submissions, historical magic link states, audit log
+//   rows) is hand-inserted, since the real services only ever operate "as of
+//   now" and several of these states need specific historical timestamps.
 // - A final safety-net pass pushes any still-Scheduled request whose
 //   ScheduledFor has (as a side effect of backdating) drifted into the past
 //   out to a safe future date — RequestDispatchBackgroundService polls every
-//   minute in Development and would otherwise try to really send email via
-//   SmtpEmailSender for a due request, which fails loudly since no SMTP
-//   server is configured anywhere in local dev.
+//   minute in Development and would otherwise try to dispatch it a second
+//   time. Email sends themselves are safe to actually run in dev now (CBLT-317's
+//   DevEmailSender just logs instead of hitting a real, unconfigured SMTP
+//   server), but a request should still only ever be dispatched once.
 public static class DevDataSeeder
 {
     public static async Task SeedAsync(
         CheckPointDbContext db,
         ProjectService projectService,
-        MagicLinkService magicLinkService,
         FeedbackCycleService feedbackCycleService,
+        RequestDispatchService requestDispatchService,
         AuditLogService auditLogService,
         TimeProvider timeProvider)
     {
@@ -325,24 +329,21 @@ public static class DevDataSeeder
             await MarkNoResponseAsync(request, nadiaPoc, request.ScheduledFor);
         }
 
-        // ---- Reminder Remy: one superseded (invalidated) link, one freshly
-        // reissued and currently valid — the manual-reminder resend state. ----
+        // ---- Reminder Remy: dispatched, then reminded, through the real
+        // RequestDispatchService calls (CBLT-317) rather than hand-inserted
+        // MagicLink rows — one superseded (invalidated) link from the
+        // original dispatch, one freshly reissued and currently valid from
+        // the reminder, exactly as SendReminderAsync produces in production.
+        // This also doubles as CBLT-316's own regression scenario: with that
+        // fix in place, the original link ends up correctly invalidated.
         var remyMembership = await AddToProjectAsync(atlas.Id, remy.Id);
         await BackdateMembershipAsync(remyMembership, now.AddDays(-21));
         var remyPoc = await AddPocAsync(remyMembership.Id, "Reggie Respondent", "reggie.respondent@example.com", PocRelationship.Internal, PocRole.Tech);
         var remyWeek2 = await StageRequestAsync(remyMembership.Id, FeedbackRequestStage.NewStarterWeek2);
-        remyWeek2.Status = FeedbackRequestStatus.Sent;
-        db.MagicLinks.Add(new MagicLink
-        {
-            Token = $"seed-{Guid.NewGuid():N}",
-            FeedbackRequestId = remyWeek2.Id,
-            PocId = remyPoc.Id,
-            IssuedAt = now.AddDays(-10),
-            ExpiresAt = now.AddDays(-3),
-            InvalidatedAt = now.AddDays(-3),
-        });
-        await db.SaveChangesAsync();
-        await magicLinkService.IssueAsync(remyWeek2.Id, remyPoc.Id); // the reissued, currently-valid link
+        await requestDispatchService.DispatchManuallyAsync(
+            remyWeek2.Id, callerId: ada.Id, callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        await requestDispatchService.SendReminderAsync(
+            remyWeek2.Id, remyPoc.Id, callerId: ada.Id, callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
         // ---- Incomplete-POC Ivan: only 1 of the 3 standard POC roles
         // assigned -> MissingStandardRoles indicator shows Dm/Other missing. ----
@@ -363,16 +364,22 @@ public static class DevDataSeeder
         await SubmitAsync(ginaWeek8, ginaPoc, ginaWeek8.ScheduledFor.AddDays(2), "Fully embedded in the team now.", "Nothing notable.", "Ready for the General cycle.", morgan.Id);
         await feedbackCycleService.HandleFeedbackRequestCompletedAsync(ginaWeek8.Id);
 
-        // ---- Guest-Ready Gary: a Sent request with a real, currently-valid
-        // magic link, printed below so it can be opened in a browser and
-        // submitted through the real guest flow end-to-end. ----
+        // ---- Guest-Ready Gary: dispatched through the real
+        // RequestDispatchService.DispatchManuallyAsync (CBLT-317) rather than
+        // hand-set Status + a direct MagicLinkService.IssueAsync call, so the
+        // seed data exercises the actual dispatch path end-to-end. The
+        // resulting link is printed below so it can be opened in a browser
+        // and submitted through the real guest flow.
         var garyMembership = await AddToProjectAsync(atlas.Id, gary.Id);
         await BackdateMembershipAsync(garyMembership, now.AddDays(-21));
         var garyPoc = await AddPocAsync(garyMembership.Id, "Gail Guest", "gail.guest@example.com", PocRelationship.Internal, PocRole.Tech);
         var garyWeek2 = await StageRequestAsync(garyMembership.Id, FeedbackRequestStage.NewStarterWeek2);
-        garyWeek2.Status = FeedbackRequestStatus.Sent;
-        await db.SaveChangesAsync();
-        var garyLink = await magicLinkService.IssueAsync(garyWeek2.Id, garyPoc.Id);
+        await requestDispatchService.DispatchManuallyAsync(
+            garyWeek2.Id, callerId: ada.Id, callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var garyLink = await db.MagicLinks
+            .Where(l => l.FeedbackRequestId == garyWeek2.Id && l.PocId == garyPoc.Id && l.InvalidatedAt == null)
+            .OrderByDescending(l => l.IssuedAt)
+            .FirstAsync();
 
         // ---- Safety net: anything still Scheduled but now due (a side effect
         // of backdating a membership above) gets pushed safely into the
