@@ -1,8 +1,7 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../auth/currentPerson'
+import { screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { OrgPersonNode } from '../api'
+import { renderAsUser, resetFetchStub, stubFetch } from '../testUtils'
 import OrgTreePage from './OrgTreePage'
 
 const FOREST: OrgPersonNode[] = [
@@ -38,29 +37,15 @@ const FOREST: OrgPersonNode[] = [
 ]
 
 function stubFetchWith(body: unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch,
-  )
+  stubFetch(async () => new Response(JSON.stringify(body), { status: 200 }))
 }
 
 describe('OrgTreePage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'p1', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('renders a nested forest at least two levels deep', async () => {
     stubFetchWith(FOREST)
-    render(
-      <MemoryRouter>
-        <OrgTreePage />
-      </MemoryRouter>,
-    )
+    renderAsUser(<OrgTreePage />)
 
     expect(await screen.findByText('Ada Admin')).toBeInTheDocument()
     expect(screen.getByText('Lee Lead')).toBeInTheDocument()
@@ -70,22 +55,14 @@ describe('OrgTreePage', () => {
 
   it('shows a "nothing visible" message for an empty forest, not an error', async () => {
     stubFetchWith([])
-    render(
-      <MemoryRouter>
-        <OrgTreePage />
-      </MemoryRouter>,
-    )
+    renderAsUser(<OrgTreePage />)
 
     expect(await screen.findByText(/no one is visible to you/i)).toBeInTheDocument()
   })
 
   it('links each Person\'s name to their profile page', async () => {
     stubFetchWith(FOREST)
-    render(
-      <MemoryRouter>
-        <OrgTreePage />
-      </MemoryRouter>,
-    )
+    renderAsUser(<OrgTreePage />)
 
     const link = await screen.findByRole('link', { name: 'Ada Admin' })
     expect(link).toHaveAttribute('href', '/dashboard/people/root')

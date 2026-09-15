@@ -3,23 +3,15 @@ using System.Net.Http.Json;
 using CheckPoint.Api.Auth;
 using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
 // GET /people/{personId} — the scoped single-Person profile read backing the
 // new Person-profile frontend page (CBLT-240 follow-up). Same three-way
-// scoping (Admin/Practice Lead/Line Manager) as AdHocReviewEndpointsTests,
-// which this file mirrors the setup shape of.
-public class PersonProfileEndpointTests : IAsyncLifetime
+// scoping (Admin/Practice Lead/Line Manager) as AdHocReviewEndpointsTests.
+public class PersonProfileEndpointTests : IntegrationTestBase
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
-    private WebApplicationFactory<Program> _factory = null!;
     private Guid _adminPersonId;
     private Guid _lineManagerPersonId;
     private Guid _otherLineManagerPersonId;
@@ -27,24 +19,11 @@ public class PersonProfileEndpointTests : IAsyncLifetime
     private Guid _otherPracticePersonId;
     private Guid _reportPersonId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await base.InitializeAsync();
 
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Testing");
-            builder.ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Default"] = _postgres.GetConnectionString(),
-                });
-            });
-        });
-
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
+        await using var db = CreateContext();
 
         var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
         var lineManagerRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.LineManager);
@@ -82,23 +61,6 @@ public class PersonProfileEndpointTests : IAsyncLifetime
         _practiceLeadPersonId = practiceLead.Id;
         _otherPracticePersonId = otherPracticePerson.Id;
         _reportPersonId = report.Id;
-    }
-
-    public async Task DisposeAsync()
-    {
-        await _factory.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
-
-    private HttpClient CreateClient(Guid? actingAsPersonId = null)
-    {
-        var client = _factory.CreateClient();
-        if (actingAsPersonId is { } personId)
-        {
-            client.DefaultRequestHeaders.Add(DevPersonAuthenticationHandler.PersonIdHeader, personId.ToString());
-        }
-
-        return client;
     }
 
     [Fact]

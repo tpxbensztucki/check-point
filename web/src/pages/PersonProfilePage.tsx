@@ -1,13 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchPerson, triggerAdHocReview, type PersonProfile } from '../api'
-
-type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'loaded'; person: PersonProfile }
-  | { kind: 'notFound' }
-  | { kind: 'forbidden' }
-  | { kind: 'error' }
+import { fetchPerson, triggerAdHocReview } from '../api'
+import { useAsyncData } from '../hooks/useAsyncData'
 
 type ReviewState =
   | { kind: 'idle' }
@@ -24,38 +18,11 @@ type ReviewState =
 // Person stays on the Admin Console's PersonDetailPage.
 function PersonProfilePage() {
   const { personId } = useParams<{ personId: string }>()
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const { state, reload: load } = useAsyncData(
+    () => (personId ? fetchPerson(personId) : Promise.resolve(null)),
+    [personId],
+  )
   const [review, setReview] = useState<ReviewState>({ kind: 'idle' })
-
-  useEffect(() => {
-    if (!personId) {
-      return
-    }
-
-    let cancelled = false
-    fetchPerson(personId).then((result) => {
-      if (cancelled) {
-        return
-      }
-      switch (result.status) {
-        case 'success':
-          setState({ kind: 'loaded', person: result.person! })
-          break
-        case 'notFound':
-          setState({ kind: 'notFound' })
-          break
-        case 'forbidden':
-          setState({ kind: 'forbidden' })
-          break
-        default:
-          setState({ kind: 'error' })
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [personId])
 
   async function handleTriggerReview() {
     if (!personId) {
@@ -68,10 +35,7 @@ function PersonProfilePage() {
     switch (result.status) {
       case 'success':
         setReview({ kind: 'triggered', alreadyPending: result.alreadyPending ?? false })
-        // Reflect the resulting Under Review status without a full reload.
-        setState((prev) =>
-          prev.kind === 'loaded' ? { kind: 'loaded', person: { ...prev.person } } : prev,
-        )
+        load()
         break
       case 'forbidden':
         setReview({
@@ -87,57 +51,61 @@ function PersonProfilePage() {
     }
   }
 
+  const result = state.kind === 'loaded' ? state.data : null
+
   return (
     <div>
       <h1 className="text-xl font-semibold text-gray-900">Person Profile</h1>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 
-      {state.kind === 'notFound' && <p className="mt-4 text-sm text-gray-500">This Person could not be found.</p>}
-
-      {state.kind === 'forbidden' && (
-        <p role="alert" className="mt-4 rounded-md bg-red-50 p-2 text-sm text-red-700">
-          You aren't authorized to view this Person.
-        </p>
-      )}
-
-      {state.kind === 'error' && (
+      {(state.kind === 'error' || result?.status === 'error') && (
         <p role="alert" className="mt-4 rounded-md bg-red-50 p-2 text-sm text-red-700">
           Something went wrong loading this Person. Please try again.
         </p>
       )}
 
-      {state.kind === 'loaded' && (
+      {result?.status === 'notFound' && (
+        <p className="mt-4 text-sm text-gray-500">This Person could not be found.</p>
+      )}
+
+      {result?.status === 'forbidden' && (
+        <p role="alert" className="mt-4 rounded-md bg-red-50 p-2 text-sm text-red-700">
+          You aren't authorized to view this Person.
+        </p>
+      )}
+
+      {result?.status === 'success' && result.person && (
         <>
           <div className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4">
-            <h2 className="text-lg font-semibold text-gray-900">{state.person.fullName}</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{result.person.fullName}</h2>
             <dl className="mt-3 space-y-2 text-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Status</dt>
-                <dd className="text-gray-900">{state.person.status}</dd>
+                <dd className="text-gray-900">{result.person.status}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Practice</dt>
-                <dd className="text-gray-900">{state.person.practiceName}</dd>
+                <dd className="text-gray-900">{result.person.practiceName}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Line manager</dt>
-                <dd className="text-gray-900">{state.person.lineManagerName ?? 'None'}</dd>
+                <dd className="text-gray-900">{result.person.lineManagerName ?? 'None'}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Roles</dt>
                 <dd className="text-gray-900">
-                  {state.person.roles.length > 0 ? state.person.roles.join(', ') : 'None'}
+                  {result.person.roles.length > 0 ? result.person.roles.join(', ') : 'None'}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-gray-500">Email</dt>
-                <dd className="text-gray-900">{state.person.email ?? 'None'}</dd>
+                <dd className="text-gray-900">{result.person.email ?? 'None'}</dd>
               </div>
             </dl>
 
             <Link
-              to={`/dashboard/people/${state.person.id}/catch-up`}
+              to={`/dashboard/people/${result.person.id}/catch-up`}
               className="mt-4 inline-block text-sm text-blue-700 hover:underline"
             >
               View catch-up history

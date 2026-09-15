@@ -1,9 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../auth/currentPerson'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { PersonProfile } from '../api'
+import { renderAsUser, resetFetchStub, stubFetch } from '../testUtils'
 import PersonProfilePage from './PersonProfilePage'
 
 const PERSON: PersonProfile = {
@@ -19,67 +18,51 @@ const PERSON: PersonProfile = {
   email: 'riley@example.com',
 }
 
-function stubFetch({
+function stubPersonFetch({
   getStatus = 200,
   postStatus = 200,
   alreadyPending = false,
 }: { getStatus?: number; postStatus?: number; alreadyPending?: boolean } = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_input: RequestInfo, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        if (postStatus !== 200) {
-          return new Response(null, { status: postStatus })
-        }
-        return new Response(
-          JSON.stringify({
-            catchUp: {
-              id: 'c1',
-              personId: 'p1',
-              feedbackRequestId: null,
-              triggerSource: 'AdHoc',
-              status: 'Pending',
-              createdAt: '2026-01-01T00:00:00Z',
-              outcomeType: null,
-              outcomeNotes: null,
-              recordedAt: null,
-            },
-            alreadyPending,
-          }),
-          { status: 200 },
-        )
+  stubFetch(async (_input, init) => {
+    if (init?.method === 'POST') {
+      if (postStatus !== 200) {
+        return new Response(null, { status: postStatus })
       }
+      return new Response(
+        JSON.stringify({
+          catchUp: {
+            id: 'c1',
+            personId: 'p1',
+            feedbackRequestId: null,
+            triggerSource: 'AdHoc',
+            status: 'Pending',
+            createdAt: '2026-01-01T00:00:00Z',
+            outcomeType: null,
+            outcomeNotes: null,
+            recordedAt: null,
+          },
+          alreadyPending,
+        }),
+        { status: 200 },
+      )
+    }
 
-      if (getStatus !== 200) {
-        return new Response(null, { status: getStatus })
-      }
-      return new Response(JSON.stringify(PERSON), { status: 200 })
-    }) as unknown as typeof fetch,
-  )
+    if (getStatus !== 200) {
+      return new Response(null, { status: getStatus })
+    }
+    return new Response(JSON.stringify(PERSON), { status: 200 })
+  })
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={['/dashboard/people/p1']}>
-      <Routes>
-        <Route path="/dashboard/people/:personId" element={<PersonProfilePage />} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  return renderAsUser(<PersonProfilePage />, { path: '/dashboard/people/:personId', initialEntries: ['/dashboard/people/p1'] })
 }
 
 describe('PersonProfilePage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('loads and displays the person', async () => {
-    stubFetch()
+    stubPersonFetch()
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Riley Report' })).toBeInTheDocument()
@@ -94,7 +77,7 @@ describe('PersonProfilePage', () => {
   })
 
   it('shows a success confirmation when triggering an ad-hoc review', async () => {
-    stubFetch({ alreadyPending: false })
+    stubPersonFetch({ alreadyPending: false })
     const user = userEvent.setup()
     renderPage()
 
@@ -104,7 +87,7 @@ describe('PersonProfilePage', () => {
   })
 
   it('shows an "already pending" message rather than implying a new review was created', async () => {
-    stubFetch({ alreadyPending: true })
+    stubPersonFetch({ alreadyPending: true })
     const user = userEvent.setup()
     renderPage()
 
@@ -114,7 +97,7 @@ describe('PersonProfilePage', () => {
   })
 
   it('shows an inline error on a 403 response, rather than crashing', async () => {
-    stubFetch({ postStatus: 403 })
+    stubPersonFetch({ postStatus: 403 })
     const user = userEvent.setup()
     renderPage()
 
@@ -124,7 +107,7 @@ describe('PersonProfilePage', () => {
   })
 
   it('shows an inline error when the current viewer is not authorized to view the person at all', async () => {
-    stubFetch({ getStatus: 403 })
+    stubPersonFetch({ getStatus: 403 })
     renderPage()
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/aren't authorized/i)
