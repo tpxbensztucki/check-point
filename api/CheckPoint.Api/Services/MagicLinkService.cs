@@ -25,6 +25,20 @@ public class MagicLinkService(CheckPointDbContext db, TimeProvider timeProvider)
 
     public async Task<MagicLink> IssueAsync(Guid feedbackRequestId, Guid pocId, CancellationToken cancellationToken = default)
     {
+        var link = CreateUnsaved(feedbackRequestId, pocId);
+        await db.SaveChangesAsync(cancellationToken);
+        return link;
+    }
+
+    // Internal (not private) so RequestDispatchService (CBLT-316) can create a
+    // new link as part of a larger SaveChangesAsync that also persists an
+    // invalidated prior link / a request's Sent status in the same commit —
+    // the link must exist as a durable fact before the email send that follows
+    // is even attempted, so a failed send never leaves the link state
+    // half-applied. Same "internal for transactional composition" precedent
+    // as LoadAndCheckAsync above.
+    internal MagicLink CreateUnsaved(Guid feedbackRequestId, Guid pocId)
+    {
         var now = timeProvider.GetUtcNow();
         var link = new MagicLink
         {
@@ -36,7 +50,6 @@ public class MagicLinkService(CheckPointDbContext db, TimeProvider timeProvider)
         };
 
         db.MagicLinks.Add(link);
-        await db.SaveChangesAsync(cancellationToken);
         return link;
     }
 
