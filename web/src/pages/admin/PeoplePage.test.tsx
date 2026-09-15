@@ -84,7 +84,7 @@ describe('PeoplePage', () => {
 
     await screen.findByRole('link', { name: 'Riley Report' })
     await user.type(screen.getByLabelText(/full name/i), 'Sam Starter')
-    await user.selectOptions(screen.getByLabelText(/practice/i), 'prac-1')
+    await user.selectOptions(screen.getByLabelText(/^practice$/i), 'prac-1')
     await user.type(screen.getByLabelText(/^email$/i), 'sam@example.com')
     await user.click(screen.getByRole('button', { name: /add person/i }))
 
@@ -102,10 +102,42 @@ describe('PeoplePage', () => {
 
     await screen.findByRole('link', { name: 'Riley Report' })
     await user.type(screen.getByLabelText(/full name/i), 'Sam Starter')
-    await user.selectOptions(screen.getByLabelText(/practice/i), 'prac-1')
+    await user.selectOptions(screen.getByLabelText(/^practice$/i), 'prac-1')
     await user.click(screen.getByRole('button', { name: /add person/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/valid email is required/i)
+  })
+
+  // CBLT-322 — column sorting.
+  it('sorts by name, toggling ascending/descending on repeated clicks', async () => {
+    const user = userEvent.setup()
+    stubFetch(async (input) => {
+      const url = typeof input === 'string' ? input : input.url
+      if (url.includes('/departments')) {
+        return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
+      }
+      return new Response(
+        JSON.stringify([
+          { ...PEOPLE[0], id: 'p1', fullName: 'Zoe Zebra' },
+          { ...PEOPLE[0], id: 'p2', fullName: 'Amy Apple' },
+        ]),
+        { status: 200 },
+      )
+    })
+    renderPage()
+
+    await screen.findByRole('link', { name: 'Zoe Zebra' })
+    const namesInOrder = () => screen.getAllByRole('link').map((el) => el.textContent)
+
+    // Name is sorted ascending by default, regardless of the API's own
+    // return order (Zoe was returned first, Amy second).
+    expect(namesInOrder()).toEqual(['Amy Apple', 'Zoe Zebra'])
+
+    await user.click(screen.getByRole('button', { name: /sort by name/i }))
+    expect(namesInOrder()).toEqual(['Zoe Zebra', 'Amy Apple'])
+
+    await user.click(screen.getByRole('button', { name: /sort by name/i }))
+    expect(namesInOrder()).toEqual(['Amy Apple', 'Zoe Zebra'])
   })
 
   it('shows each person\'s email in the table', async () => {

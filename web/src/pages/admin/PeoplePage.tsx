@@ -1,13 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createPerson, fetchPeople } from '../../adminApi'
+import { createPerson, fetchPeople, type PersonListEntry } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import SortableHeader from '../../components/ui/SortableHeader'
 import StatusMessage from '../../components/ui/StatusMessage'
 import { PERSON_STATUS_TONE } from '../../components/ui/statusColors'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { usePractices } from '../../hooks/usePractices'
+import { useSort } from '../../hooks/useSort'
+
+type SortKey = 'fullName' | 'practiceName' | 'status'
+
+const SORT_ACCESSORS: Record<SortKey, (p: PersonListEntry) => string> = {
+  fullName: (p) => p.fullName,
+  practiceName: (p) => p.practiceName,
+  status: (p) => p.status,
+}
 
 const emptyForm = { fullName: '', practiceId: '', lineManagerId: null as string | null, email: '' }
 
@@ -18,6 +28,11 @@ function PeoplePage() {
   const allPractices = usePractices()
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const { sorted, sortKey, direction, toggleSort } = useSort<PersonListEntry, SortKey>(
+    state.kind === 'loaded' ? state.data : [],
+    SORT_ACCESSORS,
+    'fullName',
+  )
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -121,16 +136,16 @@ function PeoplePage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                <th className="px-3 py-2">Name</th>
+                <SortableHeader<SortKey> label="Name" sortKey="fullName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
                 <th className="px-3 py-2">Email</th>
-                <th className="px-3 py-2">Practice</th>
-                <th className="px-3 py-2">Status</th>
+                <SortableHeader<SortKey> label="Practice" sortKey="practiceName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                <SortableHeader<SortKey> label="Status" sortKey="status" activeKey={sortKey} direction={direction} onSort={toggleSort} />
                 <th className="px-3 py-2">Roles</th>
                 <th className="px-3 py-2">Line manager</th>
               </tr>
             </thead>
             <tbody>
-              {state.data.map((person) => (
+              {sorted.map((person) => (
                 <tr key={person.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">
                     <Link to={`/dashboard/admin/people/${person.id}`} className="text-gray-900 underline">

@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react'
 import { fetchAuditLog, type AuditLogEntry } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
 import Badge from '../../components/ui/Badge'
+import SortableHeader from '../../components/ui/SortableHeader'
 import { AUDIT_ACTION_TONE } from '../../components/ui/statusColors'
+import { useSort } from '../../hooks/useSort'
+
+type SortKey = 'occurredAt' | 'viewerName' | 'action' | 'personName'
+
+const SORT_ACCESSORS: Record<SortKey, (e: AuditLogEntry) => string | number> = {
+  occurredAt: (e) => new Date(e.occurredAt).getTime(),
+  viewerName: (e) => e.viewerName,
+  action: (e) => e.action,
+  personName: (e) => e.personName,
+}
 
 // CBLT-249 — the Admin-only Audit Log view, filterable by Person, by
 // viewer, or by date range. Every filter is optional and combines via AND,
@@ -14,6 +25,13 @@ function AuditLogPage() {
   const [to, setTo] = useState('')
   const [entries, setEntries] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  // Defaults to most-recent-first, matching the backend's own default order.
+  const { sorted, sortKey, direction, toggleSort } = useSort<AuditLogEntry, SortKey>(
+    entries,
+    SORT_ACCESSORS,
+    'occurredAt',
+    'desc',
+  )
 
   // Deliberately doesn't reset to loading before each refetch — changing a
   // filter reads better leaving the current results on screen until the new
@@ -65,14 +83,14 @@ function AuditLogPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                <th className="px-3 py-2">Occurred At</th>
-                <th className="px-3 py-2">Viewer</th>
-                <th className="px-3 py-2">Action</th>
-                <th className="px-3 py-2">Person</th>
+                <SortableHeader<SortKey> label="Occurred At" sortKey="occurredAt" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                <SortableHeader<SortKey> label="Viewer" sortKey="viewerName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                <SortableHeader<SortKey> label="Action" sortKey="action" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                <SortableHeader<SortKey> label="Person" sortKey="personName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry) => (
+              {sorted.map((entry) => (
                 <tr key={entry.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">{new Date(entry.occurredAt).toLocaleString()}</td>
                   <td className="px-3 py-2">{entry.viewerName}</td>
