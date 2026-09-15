@@ -4,9 +4,13 @@ import { completeProject, createProject, fetchProjects, type Project, type Proje
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import FilterBar from '../../components/ui/FilterBar'
+import Pagination from '../../components/ui/Pagination'
 import SortableHeader from '../../components/ui/SortableHeader'
 import { PROJECT_STATUS_TONE } from '../../components/ui/statusColors'
+import { usePagination } from '../../hooks/usePagination'
 import { useSort } from '../../hooks/useSort'
+
+const PAGE_SIZE = 25
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; projects: Project[] }
 
@@ -55,6 +59,13 @@ function ProjectsPage() {
   }, [state, appliedFilters])
 
   const { sorted, sortKey, direction, toggleSort } = useSort<Project, SortKey>(filtered, SORT_ACCESSORS, 'name')
+  const { page, setPage, totalPages, pageItems, totalItems } = usePagination(sorted, PAGE_SIZE)
+
+  // A filter or sort change should land on page 1, not leave the view on a
+  // now-out-of-range page (CBLT-325).
+  useEffect(() => {
+    setPage(1)
+  }, [appliedFilters, sortKey, direction, setPage])
 
   const load = () => {
     fetchProjects().then((projects) => {
@@ -142,7 +153,7 @@ function ProjectsPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((project) => (
+              {pageItems.map((project) => (
                 <tr key={project.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">
                     <Link to={`/dashboard/admin/projects/${project.id}`} className="text-gray-900 underline">
@@ -163,6 +174,7 @@ function ProjectsPage() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} totalItems={totalItems} onPageChange={setPage} />
         </div>
       )}
     </div>
