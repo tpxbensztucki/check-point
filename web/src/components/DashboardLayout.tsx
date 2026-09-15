@@ -99,7 +99,7 @@ function DashboardLayout() {
     <div className="min-h-svh bg-surface">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
         <div>
-          <p className="font-display text-lg font-bold tracking-wide text-ink uppercase">Client Feedback Tool</p>
+          <p className="font-display text-lg font-bold tracking-wide text-ink uppercase">Checkpoint</p>
           <p className="text-sm text-gray-500">
             Signed in as {person.fullName}
             {person.roles.length > 0 ? ` (${person.roles.join(', ')})` : ''}
