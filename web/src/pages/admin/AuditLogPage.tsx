@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { fetchAuditLog, type AuditLogEntry } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
+import Badge from '../../components/ui/Badge'
+import { AUDIT_ACTION_TONE } from '../../components/ui/statusColors'
 
 // CBLT-249 — the Admin-only Audit Log view, filterable by Person, by
 // viewer, or by date range. Every filter is optional and combines via AND,
@@ -74,7 +76,9 @@ function AuditLogPage() {
                 <tr key={entry.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">{new Date(entry.occurredAt).toLocaleString()}</td>
                   <td className="px-3 py-2">{entry.viewerName}</td>
-                  <td className="px-3 py-2">{entry.action}</td>
+                  <td className="px-3 py-2">
+                    <Badge tone={AUDIT_ACTION_TONE[entry.action]}>{entry.action}</Badge>
+                  </td>
                   <td className="px-3 py-2">{entry.personName}</td>
                 </tr>
               ))}

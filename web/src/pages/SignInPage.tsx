@@ -48,7 +48,7 @@ function SignInPage() {
   return (
     <main className="flex min-h-svh flex-col items-center bg-white px-4 py-12">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-semibold text-gray-900">Sign in</h1>
+        <h1 className="font-display text-2xl font-bold text-ink uppercase">Sign in</h1>
         <p className="mt-1 text-sm text-gray-500">
           No sign-in exists yet — pick who you're signing in as for now.
         </p>
@@ -62,7 +62,7 @@ function SignInPage() {
           placeholder="Search by name…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="mt-6 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="mt-6 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
         />
 
         {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading people…</p>}

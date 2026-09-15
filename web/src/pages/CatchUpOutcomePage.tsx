@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchCatchUpHistory, recordCatchUpOutcome, type CatchUpOutcomeType } from '../api'
 import { useAsyncData } from '../hooks/useAsyncData'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import StatusMessage from '../components/ui/StatusMessage'
+import { CATCH_UP_OUTCOME_TONE } from '../components/ui/statusColors'
 
 const OUTCOME_LABELS: Record<CatchUpOutcomeType, string> = {
   SixWeekCheckInAdded: 'Six-week check-in added',
@@ -65,13 +69,16 @@ function CatchUpOutcomePage() {
       {state.kind === 'loaded' && (
         <>
           {pending ? (
-            <form onSubmit={handleSubmit} className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4">
+            <form
+              onSubmit={handleSubmit}
+              className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4"
+            >
               <h2 className="text-sm font-semibold text-gray-700">Record outcome</h2>
 
               {error && (
-                <p role="alert" className="mt-2 rounded-md bg-red-50 p-2 text-sm text-red-700">
-                  {error}
-                </p>
+                <div className="mt-2">
+                  <StatusMessage tone="danger">{error}</StatusMessage>
+                </div>
               )}
 
               <label htmlFor="outcome-type" className="mt-3 block text-sm font-medium text-gray-700">
@@ -102,13 +109,9 @@ function CatchUpOutcomePage() {
                 rows={3}
               />
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-4 rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-              >
+              <Button variant="primary" type="submit" disabled={submitting} className="mt-4">
                 {submitting ? 'Recording…' : 'Record outcome'}
-              </button>
+              </Button>
             </form>
           ) : (
             <p className="mt-4 text-sm text-gray-500">There is no pending catch-up for this Person right now.</p>
@@ -120,11 +123,13 @@ function CatchUpOutcomePage() {
           ) : (
             <ul className="mt-2 divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
               {resolved.map((entry) => (
-                <li key={entry.id} className="px-4 py-3 text-sm">
-                  <span className="font-medium text-gray-900">
-                    {entry.outcomeType ? OUTCOME_LABELS[entry.outcomeType] : entry.status}
-                  </span>
-                  {entry.outcomeNotes && <span className="ml-2 text-gray-500">{entry.outcomeNotes}</span>}
+                <li key={entry.id} className="flex items-center gap-2 px-4 py-3 text-sm">
+                  {entry.outcomeType ? (
+                    <Badge tone={CATCH_UP_OUTCOME_TONE[entry.outcomeType]}>{OUTCOME_LABELS[entry.outcomeType]}</Badge>
+                  ) : (
+                    <span className="font-medium text-gray-900">{entry.status}</span>
+                  )}
+                  {entry.outcomeNotes && <span className="text-gray-500">{entry.outcomeNotes}</span>}
                 </li>
               ))}
             </ul>

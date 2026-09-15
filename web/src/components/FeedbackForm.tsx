@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import Button from './ui/Button'
 
 export interface FeedbackFormValues {
   doingWell: string
@@ -12,6 +13,12 @@ interface FieldConfig {
   key: keyof FeedbackFormValues
   label: string
   helpText: string
+  // Color-codes each field by sentiment (CBLT-321): green for the positive
+  // field, red for the negative one, and amber (not red) for "needs to
+  // improve" — deliberately distinct from "not doing well", since it's a
+  // forward-looking next step rather than a negative verdict.
+  accentBorder: string
+  accentRing: string
 }
 
 // Copy chosen to actively encourage constructive, balanced framing (spec Section
@@ -22,16 +29,22 @@ const FIELDS: FieldConfig[] = [
     key: 'doingWell',
     label: 'What they are doing well',
     helpText: 'Be specific — concrete examples land better as genuine recognition.',
+    accentBorder: 'border-l-success',
+    accentRing: 'focus:ring-success',
   },
   {
     key: 'notDoingWell',
     label: "What they aren't doing well",
     helpText: 'Focus on the behaviour or outcome, not the person — the goal is to help them grow.',
+    accentBorder: 'border-l-danger',
+    accentRing: 'focus:ring-danger',
   },
   {
     key: 'needsToImprove',
     label: 'What they need to improve',
     helpText: 'Frame this as an actionable next step they can act on.',
+    accentBorder: 'border-l-warning',
+    accentRing: 'focus:ring-warning',
   },
 ]
 
@@ -92,9 +105,9 @@ function FeedbackForm({ onSubmit }: FeedbackFormProps) {
         const overLimit = value.length > FEEDBACK_FIELD_MAX_LENGTH
 
         return (
-          <div key={field.key} className="flex flex-col gap-1">
-            <label htmlFor={fieldId} className="text-sm font-medium text-gray-900">
-              {field.label} <span aria-hidden="true" className="text-red-600">*</span>
+          <div key={field.key} className={`flex flex-col gap-1 border-l-4 pl-3 ${field.accentBorder}`}>
+            <label htmlFor={fieldId} className="text-sm font-medium text-ink">
+              {field.label} <span aria-hidden="true" className="text-danger">*</span>
             </label>
             <p className="text-xs text-gray-500">{field.helpText}</p>
             <textarea
@@ -107,16 +120,16 @@ function FeedbackForm({ onSubmit }: FeedbackFormProps) {
               aria-required="true"
               aria-invalid={showError}
               aria-describedby={showError ? `${counterId} ${errorId}` : counterId}
-              className={`w-full rounded-md border p-2 text-sm text-gray-900 focus:ring-2 focus:ring-offset-1 focus:outline-none ${
-                showError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              className={`w-full rounded-md border p-2 text-sm text-ink focus:ring-2 focus:ring-offset-1 focus:outline-none ${
+                showError ? 'border-danger focus:ring-danger' : `border-gray-300 ${field.accentRing}`
               }`}
             />
             <div className="flex items-center justify-between text-xs">
-              <span id={counterId} className={overLimit ? 'font-medium text-red-600' : 'text-gray-400'}>
+              <span id={counterId} className={overLimit ? 'font-medium text-danger' : 'text-gray-400'}>
                 {value.length} / {FEEDBACK_FIELD_MAX_LENGTH}
               </span>
               {showError && (
-                <span id={errorId} role="alert" className="text-red-600">
+                <span id={errorId} role="alert" className="text-danger">
                   {error}
                 </span>
               )}
@@ -125,12 +138,9 @@ function FeedbackForm({ onSubmit }: FeedbackFormProps) {
         )
       })}
 
-      <button
-        type="submit"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none"
-      >
+      <Button variant="primary" type="submit" className="px-4 py-2 text-sm font-semibold">
         Submit feedback
-      </button>
+      </Button>
     </form>
   )
 }

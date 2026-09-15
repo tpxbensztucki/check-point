@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchOrgTree, type OrgPersonNode } from '../api'
+import Badge from '../components/ui/Badge'
+import { ORPHANED_TONE, PERSON_STATUS_TONE } from '../components/ui/statusColors'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; forest: OrgPersonNode[] }
 
@@ -50,14 +52,12 @@ function OrgTreeNode({ node }: { node: OrgPersonNode }) {
   return (
     <li>
       <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2">
-        <Link to={`/dashboard/people/${node.id}`} className="font-medium text-gray-900 hover:underline">
+        <Link to={`/dashboard/people/${node.id}`} className="font-medium text-ink hover:underline">
           {node.fullName}
         </Link>
-        <span className="text-xs text-gray-500">{node.status}</span>
+        <Badge tone={PERSON_STATUS_TONE[node.status]}>{node.status}</Badge>
         {node.roles.length > 0 && <span className="text-xs text-gray-500">{node.roles.join(', ')}</span>}
-        {node.isOrphaned && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">Orphaned</span>
-        )}
+        {node.isOrphaned && <Badge tone={ORPHANED_TONE}>Orphaned</Badge>}
       </div>
       {node.reports.length > 0 && (
         <ul className="mt-2 ml-6 space-y-2 border-l border-gray-200 pl-4">

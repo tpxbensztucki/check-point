@@ -9,6 +9,8 @@ import {
   type PersonListEntry,
 } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
+import Button from '../../components/ui/Button'
+import StatusMessage from '../../components/ui/StatusMessage'
 import { usePractices } from '../../hooks/usePractices'
 
 const ALL_ROLES = ['Admin', 'Practice Lead', 'Line Manager']
@@ -129,9 +131,9 @@ function PersonDetailPage() {
       <h1 className="text-xl font-semibold text-gray-900">{state.person.fullName}</h1>
 
       {message && (
-        <p role="alert" className="mt-2 max-w-md rounded-md bg-gray-50 p-2 text-sm text-gray-700">
-          {message}
-        </p>
+        <div className="mt-2 max-w-md">
+          <StatusMessage tone="neutral">{message}</StatusMessage>
+        </div>
       )}
 
       <form onSubmit={handleSave} className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4">
@@ -194,9 +196,9 @@ function PersonDetailPage() {
           className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
         />
 
-        <button type="submit" className="mt-4 rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white">
+        <Button variant="primary" type="submit" className="mt-4">
           Save
-        </button>
+        </Button>
       </form>
 
       <div className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4">
@@ -208,13 +210,9 @@ function PersonDetailPage() {
               <li key={roleName} className="flex items-center gap-2">
                 <span className="w-32 text-sm text-gray-700">{roleName}</span>
                 {held ? (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveRole(roleName)}
-                    className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                  >
+                  <Button variant="secondary" onClick={() => handleRemoveRole(roleName)} className="px-2 py-1 text-xs">
                     Remove
-                  </button>
+                  </Button>
                 ) : (
                   <>
                     {roleName === 'Practice Lead' && (
@@ -232,14 +230,14 @@ function PersonDetailPage() {
                         ))}
                       </select>
                     )}
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
                       disabled={roleName === 'Practice Lead' && !rolePracticeId}
                       onClick={() => handleAssignRole(roleName)}
-                      className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      className="px-2 py-1 text-xs"
                     >
                       Assign
-                    </button>
+                    </Button>
                   </>
                 )}
               </li>
@@ -253,14 +251,9 @@ function PersonDetailPage() {
         <p className="mt-1 text-sm text-gray-500">
           {isLeaver ? 'This Person is a Leaver.' : 'Marking a Person as a Leaver cannot be undone.'}
         </p>
-        <button
-          type="button"
-          disabled={isLeaver}
-          onClick={handleMarkAsLeaver}
-          className="mt-2 rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
+        <Button variant="destructive" disabled={isLeaver} onClick={handleMarkAsLeaver} className="mt-2">
           Mark as Leaver
-        </button>
+        </Button>
       </div>
     </div>
   )

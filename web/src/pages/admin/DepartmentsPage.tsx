@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createDepartment, createPractice, fetchDepartments } from '../../adminApi'
+import Button from '../../components/ui/Button'
 import { useAsyncData } from '../../hooks/useAsyncData'
 
 // CBLT-305 — the org structure management screen. No edit/delete for either
@@ -56,9 +57,9 @@ function DepartmentsPage() {
           placeholder="New department name…"
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
-        <button type="submit" className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white whitespace-nowrap">
+        <Button variant="primary" type="submit" className="px-3 py-2">
           Add department
-        </button>
+        </Button>
       </form>
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
@@ -99,12 +100,9 @@ function DepartmentsPage() {
                   placeholder="New practice name…"
                   className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
-                <button
-                  type="submit"
-                  className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50 whitespace-nowrap"
-                >
+                <Button variant="secondary" type="submit" className="px-2 py-1.5">
                   Add practice
-                </button>
+                </Button>
               </form>
             </li>
           ))}

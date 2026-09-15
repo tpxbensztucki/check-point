@@ -1,1 +1,33 @@
 @import 'tailwindcss';
+
+/*
+ * Brand tokens (CBLT-318), pulled directly from tpximpact.com's compiled CSS —
+ * primary blue, near-black ink, off-white surface, plus a restrained set of
+ * status accent pairs (bold + pastel tint) used only for feedback/status
+ * color-coding (CBLT-319/321), not general decoration. Tailwind v4 has no
+ * tailwind.config.js — this @theme block is the only place these tokens live.
+ */
+@theme {
+  --color-primary: #0252bb;
+  --color-primary-dark: #013a87;
+  --color-ink: #141414;
+  --color-surface: #f9f9ff;
+
+  --color-success: #22cea0;
+  --color-success-bg: #cafce5;
+  --color-danger: #fa4d56;
+  --color-danger-bg: #ffcfca;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-info: #00b8ff;
+  --color-info-bg: #c8e9ff;
+
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Oswald', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+}
