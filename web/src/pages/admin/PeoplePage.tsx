@@ -1,16 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createPerson, fetchPeople, type PersonListEntry, type PersonStatus } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import FilterBar from '../../components/ui/FilterBar'
+import Pagination from '../../components/ui/Pagination'
 import SortableHeader from '../../components/ui/SortableHeader'
 import StatusMessage from '../../components/ui/StatusMessage'
 import { PERSON_STATUS_TONE } from '../../components/ui/statusColors'
 import { useAsyncData } from '../../hooks/useAsyncData'
+import { usePagination } from '../../hooks/usePagination'
 import { usePractices } from '../../hooks/usePractices'
 import { useSort } from '../../hooks/useSort'
+
+const PAGE_SIZE = 25
 
 type SortKey = 'fullName' | 'practiceName' | 'status'
 
@@ -68,12 +72,20 @@ function PeoplePage() {
     })
   }, [state, appliedFilters])
 
-  // Filter narrows the set, then sort orders the result (CBLT-322/323).
+  // Filter narrows the set, then sort orders the result, then pagination
+  // slices it (CBLT-322/323/324).
   const { sorted, sortKey, direction, toggleSort } = useSort<PersonListEntry, SortKey>(
     filtered,
     SORT_ACCESSORS,
     'fullName',
   )
+  const { page, setPage, totalPages, pageItems, totalItems } = usePagination(sorted, PAGE_SIZE)
+
+  // A filter or sort change should land on page 1, not leave the view on a
+  // now-out-of-range page.
+  useEffect(() => {
+    setPage(1)
+  }, [appliedFilters, sortKey, direction, setPage])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -226,7 +238,7 @@ function PeoplePage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((person) => (
+              {pageItems.map((person) => (
                 <tr key={person.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">
                     <Link to={`/dashboard/admin/people/${person.id}`} className="text-gray-900 underline">
@@ -244,6 +256,7 @@ function PeoplePage() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} totalItems={totalItems} onPageChange={setPage} />
         </div>
       )}
     </div>
