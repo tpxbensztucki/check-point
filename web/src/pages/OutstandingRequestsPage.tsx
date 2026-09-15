@@ -7,9 +7,19 @@ import {
 } from '../api'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import SortableHeader from '../components/ui/SortableHeader'
 import { POC_RESPONSE_STATUS_TONE } from '../components/ui/statusColors'
+import { useSort } from '../hooks/useSort'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; entries: OutstandingRequestEntry[] }
+
+type SortKey = 'personName' | 'projectName' | 'status'
+
+const SORT_ACCESSORS: Record<SortKey, (e: OutstandingRequestEntry) => string> = {
+  personName: (e) => e.personName,
+  projectName: (e) => e.projectName,
+  status: (e) => e.status,
+}
 
 const STAGE_LABELS: Record<FeedbackRequestStage, string> = {
   NewStarterWeek2: '2-week New Starter check-in',
@@ -33,6 +43,11 @@ const STAGE_ORDER: FeedbackRequestStage[] = [
 function OutstandingRequestsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [reminderState, setReminderState] = useState<Record<string, 'sending' | 'sent' | 'failed'>>({})
+  const { sorted, sortKey, direction, toggleSort } = useSort<OutstandingRequestEntry, SortKey>(
+    state.kind === 'loaded' ? state.entries : [],
+    SORT_ACCESSORS,
+    'personName',
+  )
 
   useEffect(() => {
     fetchOutstandingRequests().then((entries) => {
@@ -40,6 +55,8 @@ function OutstandingRequestsPage() {
     })
   }, [])
 
+  // Sorting is applied before grouping, so each cycle-stage group renders in
+  // the chosen sort order rather than the grouping resetting it.
   const grouped = useMemo(() => {
     if (state.kind !== 'loaded') {
       return []
@@ -47,9 +64,9 @@ function OutstandingRequestsPage() {
 
     return STAGE_ORDER.map((stage) => ({
       stage,
-      entries: state.entries.filter((e) => e.stage === stage),
+      entries: sorted.filter((e) => e.stage === stage),
     })).filter((group) => group.entries.length > 0)
-  }, [state])
+  }, [state, sorted])
 
   async function handleRemind(entry: OutstandingRequestEntry) {
     const key = `${entry.feedbackRequestId}:${entry.pocId}`
@@ -75,10 +92,10 @@ function OutstandingRequestsPage() {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                 <tr>
-                  <th className="px-3 py-2">Person</th>
-                  <th className="px-3 py-2">Project</th>
+                  <SortableHeader<SortKey> label="Person" sortKey="personName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableHeader<SortKey> label="Project" sortKey="projectName" activeKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-3 py-2">POC</th>
-                  <th className="px-3 py-2">Status</th>
+                  <SortableHeader<SortKey> label="Status" sortKey="status" activeKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-3 py-2" />
                 </tr>
               </thead>

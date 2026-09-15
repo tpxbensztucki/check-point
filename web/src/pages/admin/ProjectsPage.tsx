@@ -3,15 +3,29 @@ import { Link } from 'react-router-dom'
 import { completeProject, createProject, fetchProjects, type Project } from '../../adminApi'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import SortableHeader from '../../components/ui/SortableHeader'
 import { PROJECT_STATUS_TONE } from '../../components/ui/statusColors'
+import { useSort } from '../../hooks/useSort'
 
 type LoadState = { kind: 'loading' } | { kind: 'loaded'; projects: Project[] }
+
+type SortKey = 'name' | 'status'
+
+const SORT_ACCESSORS: Record<SortKey, (p: Project) => string> = {
+  name: (p) => p.name,
+  status: (p) => p.status,
+}
 
 // CBLT-307 — the Projects management screen. Membership/POC management
 // lives on ProjectDetailPage.
 function ProjectsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [newProjectName, setNewProjectName] = useState('')
+  const { sorted, sortKey, direction, toggleSort } = useSort<Project, SortKey>(
+    state.kind === 'loaded' ? state.projects : [],
+    SORT_ACCESSORS,
+    'name',
+  )
 
   const load = () => {
     fetchProjects().then((projects) => {
@@ -68,13 +82,13 @@ function ProjectsPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Status</th>
+                <SortableHeader<SortKey> label="Name" sortKey="name" activeKey={sortKey} direction={direction} onSort={toggleSort} />
+                <SortableHeader<SortKey> label="Status" sortKey="status" activeKey={sortKey} direction={direction} onSort={toggleSort} />
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {state.projects.map((project) => (
+              {sorted.map((project) => (
                 <tr key={project.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">
                     <Link to={`/dashboard/admin/projects/${project.id}`} className="text-gray-900 underline">
