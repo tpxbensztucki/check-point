@@ -99,7 +99,7 @@ function OutstandingRequestsPage() {
                       <td className="px-3 py-2">
                         {canRemind && (
                           <Button
-                            variant="secondary"
+                            variant={reminder === 'failed' ? 'destructive' : 'secondary'}
                             onClick={() => handleRemind(entry)}
                             disabled={reminder === 'sending'}
                             className="px-2 py-1 text-xs"
