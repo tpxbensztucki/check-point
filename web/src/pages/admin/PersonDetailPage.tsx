@@ -63,12 +63,18 @@ function PersonDetailPage() {
       return
     }
 
+    // CBLT-327 — Email is now required, not just captured when convenient.
+    if (!email.trim() || !email.includes('@')) {
+      setMessage('A valid email is required.')
+      return
+    }
+
     const success = await updatePerson(personId, {
       fullName: fullName.trim(),
       practiceId,
       lineManagerId,
       headOfPracticeId,
-      email: email.trim() || null,
+      email: email.trim(),
     })
     setMessage(success ? 'Saved.' : 'Something went wrong saving these changes.')
     if (success) {
@@ -186,7 +192,7 @@ function PersonDetailPage() {
         </div>
 
         <label htmlFor="edit-email" className="mt-3 block text-sm font-medium text-gray-700">
-          Email (optional)
+          Email
         </label>
         <input
           id="edit-email"
