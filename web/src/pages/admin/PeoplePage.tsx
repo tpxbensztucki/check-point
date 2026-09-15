@@ -1,36 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  createPerson,
-  fetchDepartments,
-  fetchPeople,
-  type DepartmentWithPractices,
-  type PersonListEntry,
-} from '../../adminApi'
+import { createPerson, fetchPeople } from '../../adminApi'
 import PersonPicker from '../../components/PersonPicker'
-
-type LoadState = { kind: 'loading' } | { kind: 'loaded'; people: PersonListEntry[] }
+import { useAsyncData } from '../../hooks/useAsyncData'
+import { usePractices } from '../../hooks/usePractices'
 
 const emptyForm = { fullName: '', practiceId: '', lineManagerId: null as string | null, email: '' }
 
 // CBLT-306 — the People management screen. Editing/roles/leaver live on
 // PersonDetailPage; this screen is the list plus the "New Person" form.
 function PeoplePage() {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
-  const [departments, setDepartments] = useState<DepartmentWithPractices[]>([])
+  const { state, reload: load } = useAsyncData(fetchPeople)
+  const allPractices = usePractices()
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState<string | null>(null)
-
-  const load = () => {
-    fetchPeople().then((people) => {
-      setState({ kind: 'loaded', people })
-    })
-  }
-
-  useEffect(load, [])
-  useEffect(() => {
-    fetchDepartments().then(setDepartments)
-  }, [])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -55,8 +38,6 @@ function PeoplePage() {
       setError('Something went wrong creating this Person. Please check the fields and try again.')
     }
   }
-
-  const allPractices = departments.flatMap((d) => d.practices)
 
   return (
     <div>
@@ -138,7 +119,7 @@ function PeoplePage() {
               </tr>
             </thead>
             <tbody>
-              {state.people.map((person) => (
+              {state.data.map((person) => (
                 <tr key={person.id} className="border-t border-gray-100">
                   <td className="px-3 py-2">
                     <Link to={`/dashboard/admin/people/${person.id}`} className="text-gray-900 underline">

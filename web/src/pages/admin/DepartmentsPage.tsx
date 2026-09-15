@@ -1,27 +1,18 @@
-import { useEffect, useState } from 'react'
-import { createDepartment, createPractice, fetchDepartments, type DepartmentWithPractices } from '../../adminApi'
-
-type LoadState = { kind: 'loading' } | { kind: 'loaded'; departments: DepartmentWithPractices[] }
+import { useState } from 'react'
+import { createDepartment, createPractice, fetchDepartments } from '../../adminApi'
+import { useAsyncData } from '../../hooks/useAsyncData'
 
 // CBLT-305 — the org structure management screen. No edit/delete for either
 // Department or Practice: the backend has no update/delete endpoint for
 // either today, and this ticket doesn't introduce one.
 function DepartmentsPage() {
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
-  const [newDepartmentName, setNewDepartmentName] = useState('')
-  const [newPracticeNameByDept, setNewPracticeNameByDept] = useState<Record<string, string>>({})
-
   // Deliberately doesn't reset to { kind: 'loading' } before fetching — the
   // initial state already is 'loading', and a refresh after creating
   // something reads better leaving the current list on screen until the new
   // data arrives rather than flashing back to a loading state.
-  const load = () => {
-    fetchDepartments().then((departments) => {
-      setState({ kind: 'loaded', departments })
-    })
-  }
-
-  useEffect(load, [])
+  const { state, reload: load } = useAsyncData(fetchDepartments)
+  const [newDepartmentName, setNewDepartmentName] = useState('')
+  const [newPracticeNameByDept, setNewPracticeNameByDept] = useState<Record<string, string>>({})
 
   async function handleCreateDepartment(e: React.FormEvent) {
     e.preventDefault()
@@ -72,13 +63,13 @@ function DepartmentsPage() {
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 
-      {state.kind === 'loaded' && state.departments.length === 0 && (
+      {state.kind === 'loaded' && state.data.length === 0 && (
         <p className="mt-4 text-sm text-gray-500">No departments yet.</p>
       )}
 
       {state.kind === 'loaded' && (
         <ul className="mt-4 space-y-4">
-          {state.departments.map((department) => (
+          {state.data.map((department) => (
             <li key={department.id} className="rounded-md border border-gray-200 bg-white p-4">
               <h2 className="font-medium text-gray-900">{department.name}</h2>
 

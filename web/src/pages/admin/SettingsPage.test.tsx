@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../../auth/currentPerson'
+import { afterEach, describe, expect, it } from 'vitest'
+import { renderAsUser, resetFetchStub, stubFetch } from '../../testUtils'
 import type { AdminSettings } from '../../adminApi'
 import SettingsPage from './SettingsPage'
 
@@ -14,31 +14,21 @@ const SETTINGS: AdminSettings = {
   targetOtherPocCount: 1,
 }
 
-function stubFetch({ getBody = SETTINGS, putOk = true }: { getBody?: AdminSettings; putOk?: boolean } = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_input: RequestInfo, init?: RequestInit) => {
-      if (init?.method === 'PUT') {
-        return new Response(putOk ? JSON.stringify(getBody) : null, { status: putOk ? 200 : 400 })
-      }
-      return new Response(JSON.stringify(getBody), { status: 200 })
-    }) as unknown as typeof fetch,
-  )
+function stubSettingsFetch({ getBody = SETTINGS, putOk = true }: { getBody?: AdminSettings; putOk?: boolean } = {}) {
+  stubFetch(async (_input, init) => {
+    if (init?.method === 'PUT') {
+      return new Response(putOk ? JSON.stringify(getBody) : null, { status: putOk ? 200 : 400 })
+    }
+    return new Response(JSON.stringify(getBody), { status: 200 })
+  })
 }
 
 describe('SettingsPage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('shows the current value of every setting', async () => {
-    stubFetch()
-    render(<SettingsPage />)
+    stubSettingsFetch()
+    renderAsUser(<SettingsPage />)
 
     expect(await screen.findByDisplayValue('2, 4, 8')).toBeInTheDocument()
     expect(screen.getByLabelText(/skip next fy quarter/i)).toHaveValue(4)
@@ -47,9 +37,9 @@ describe('SettingsPage', () => {
   })
 
   it('saving sends the full updated settings object', async () => {
-    stubFetch()
+    stubSettingsFetch()
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderAsUser(<SettingsPage />)
 
     await screen.findByDisplayValue('2, 4, 8')
     await user.clear(screen.getByLabelText(/skip next fy quarter/i))
@@ -67,9 +57,9 @@ describe('SettingsPage', () => {
   })
 
   it('rejects an empty New Starter interval list without calling the endpoint', async () => {
-    stubFetch()
+    stubSettingsFetch()
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderAsUser(<SettingsPage />)
 
     await screen.findByDisplayValue('2, 4, 8')
     await user.clear(screen.getByLabelText(/new starter check-in intervals/i))
@@ -80,9 +70,9 @@ describe('SettingsPage', () => {
   })
 
   it('rejects non-increasing New Starter intervals without calling the endpoint', async () => {
-    stubFetch()
+    stubSettingsFetch()
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderAsUser(<SettingsPage />)
 
     await screen.findByDisplayValue('2, 4, 8')
     await user.clear(screen.getByLabelText(/new starter check-in intervals/i))
@@ -94,9 +84,9 @@ describe('SettingsPage', () => {
   })
 
   it('shows an error message when saving fails', async () => {
-    stubFetch({ putOk: false })
+    stubSettingsFetch({ putOk: false })
     const user = userEvent.setup()
-    render(<SettingsPage />)
+    renderAsUser(<SettingsPage />)
 
     await screen.findByDisplayValue('2, 4, 8')
     await user.click(screen.getByRole('button', { name: /save settings/i }))

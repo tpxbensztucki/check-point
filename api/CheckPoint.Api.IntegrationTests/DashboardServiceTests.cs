@@ -2,28 +2,21 @@ using CheckPoint.Api.Contracts;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
 // Exercises CBLT-243 directly against DashboardService.GetOutstandingRequestsAsync.
-public class DashboardServiceTests : IAsyncLifetime
+public class DashboardServiceTests : IntegrationTestBase
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
-    private readonly FakeTimeProvider _time = new(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
     private Guid _projectId;
     private Guid _practiceId;
     private Guid _otherPracticeId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        await base.InitializeAsync();
 
         await using var context = CreateContext();
-        await context.Database.MigrateAsync();
-
         var practice = new Practice { Name = "Software Engineering", Department = new Department { Name = "Tech & Data" } };
         var otherPractice = new Practice { Name = "Design", Department = new Department { Name = "Tech & Data" } };
         context.Practices.AddRange(practice, otherPractice);
@@ -36,26 +29,7 @@ public class DashboardServiceTests : IAsyncLifetime
         _projectId = project.Id;
     }
 
-    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
-
-    private CheckPointDbContext CreateContext()
-    {
-        var options = new DbContextOptionsBuilder<CheckPointDbContext>()
-            .UseNpgsql(_postgres.GetConnectionString())
-            .Options;
-        return new CheckPointDbContext(options);
-    }
-
-    private DashboardService CreateService(CheckPointDbContext context) => new(context, _time);
-
-    private RequestDispatchService CreateDispatchService(CheckPointDbContext context, RecordingEmailSender emailSender) =>
-        new(
-            context,
-            _time,
-            emailSender,
-            new MagicLinkService(context, _time),
-            new AdminSettingsService(context),
-            Options.Create(new FrontendOptions()));
+    private DashboardService CreateService(CheckPointDbContext context) => new(context, Time);
 
     private async Task<Guid> CreatePersonAsync(Guid practiceId)
     {
@@ -64,7 +38,7 @@ public class DashboardServiceTests : IAsyncLifetime
         context.People.Add(person);
         await context.SaveChangesAsync();
 
-        var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+        var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
         await projectService.AddPersonAsync(_projectId, person.Id);
         return person.Id;
     }
@@ -161,11 +135,11 @@ public class DashboardServiceTests : IAsyncLifetime
 
         await using (var context = CreateContext())
         {
-            var projectService = new ProjectService(context, _time, new AdminSettingsService(context));
+            var projectService = new ProjectService(context, Time, CreateAdminSettingsService(context));
             await projectService.RemovePersonAsync(_projectId, personId);
         }
 
-        _time.Advance(TimeSpan.FromDays(14));
+        Time.Advance(TimeSpan.FromDays(14));
         var emailSender = new RecordingEmailSender();
         await using (var context = CreateContext())
         {
@@ -193,7 +167,7 @@ public class DashboardServiceTests : IAsyncLifetime
             requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
 
         var token = emailSender.Sent.Single().Body.Split("/feedback/")[1].Split('\n')[0].Trim();
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         await submissionService.SubmitAsync(token, new SubmitFeedbackRequest("Great work.", "Nothing much.", "Keep it up."));
 
         var result = await CreateService(context).GetOutstandingRequestsAsync(
@@ -218,7 +192,7 @@ public class DashboardServiceTests : IAsyncLifetime
 
         var submittedEmail = emailSender.Sent.Single(e => e.To == "alex@example.com");
         var token = submittedEmail.Body.Split("/feedback/")[1].Split('\n')[0].Trim();
-        var submissionService = new FeedbackSubmissionService(context, _time, new MagicLinkService(context, _time));
+        var submissionService = new FeedbackSubmissionService(context, Time, new MagicLinkService(context, Time));
         await submissionService.SubmitAsync(token, new SubmitFeedbackRequest("Great work.", "Nothing much.", "Keep it up."));
 
         var result = await CreateService(context).GetOutstandingRequestsAsync(

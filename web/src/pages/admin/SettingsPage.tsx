@@ -9,6 +9,12 @@ type LoadState =
 // CBLT-251 — the Admin Settings scaffold. One singleton settings row on the
 // backend, grouped here into sections for display. Saving always sends the
 // full settings object (matching the backend's own full-field-set PUT).
+//
+// Deliberately NOT using useAsyncData here (unlike most other pages in this
+// file's family): the loaded data becomes locally-editable form state (every
+// field change reassigns `state` wholesale via `update`), not a read-only
+// display of whatever the hook last fetched — forcing it through the hook
+// would mean fighting its return value instead of just owning the state.
 function SettingsPage() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [intervalsText, setIntervalsText] = useState('')

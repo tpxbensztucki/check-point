@@ -1,8 +1,7 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../../auth/currentPerson'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { renderAsUser, resetFetchStub, stubFetch } from '../../testUtils'
 import type { PersonListEntry, ProjectMember, ProjectMembershipPocs } from '../../adminApi'
 import ProjectDetailPage from './ProjectDetailPage'
 
@@ -31,67 +30,48 @@ const POCS: ProjectMembershipPocs = {
   missingStandardRoles: ['Dm', 'Other'],
 }
 
-function stubFetch({ writeOk = true }: { writeOk?: boolean } = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.url
-      if (init?.method) {
-        return new Response(null, { status: writeOk ? 200 : 400 })
-      }
-      if (url.includes('/pocs')) {
-        return new Response(JSON.stringify(POCS), { status: 200 })
-      }
-      if (url.includes('/people') && !url.includes('/projects/')) {
-        return new Response(JSON.stringify(PEOPLE), { status: 200 })
-      }
-      if (url.includes('/projects/proj-1/people')) {
-        return new Response(JSON.stringify(MEMBERS), { status: 200 })
-      }
+function stubProjectFetch({ writeOk = true }: { writeOk?: boolean } = {}) {
+  stubFetch(async (input, init) => {
+    const url = typeof input === 'string' ? input : input.url
+    if (init?.method) {
+      return new Response(null, { status: writeOk ? 200 : 400 })
+    }
+    if (url.includes('/pocs')) {
+      return new Response(JSON.stringify(POCS), { status: 200 })
+    }
+    if (url.includes('/people') && !url.includes('/projects/')) {
       return new Response(JSON.stringify(PEOPLE), { status: 200 })
-    }) as unknown as typeof fetch,
-  )
+    }
+    if (url.includes('/projects/proj-1/people')) {
+      return new Response(JSON.stringify(MEMBERS), { status: 200 })
+    }
+    return new Response(JSON.stringify(PEOPLE), { status: 200 })
+  })
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={['/dashboard/admin/projects/proj-1']}>
-      <Routes>
-        <Route path="/dashboard/admin/projects/:projectId" element={<ProjectDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  return renderAsUser(<ProjectDetailPage />, { path: '/dashboard/admin/projects/:projectId', initialEntries: ['/dashboard/admin/projects/proj-1'] })
 }
 
 describe('ProjectDetailPage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('lists current members', async () => {
-    stubFetch()
+    stubProjectFetch()
     renderPage()
 
     expect(await screen.findByText('Riley Report')).toBeInTheDocument()
   })
 
   it('shows a message when nobody is on the project', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })) as unknown as typeof fetch,
-    )
+    stubFetch(async () => new Response(JSON.stringify([]), { status: 200 }))
     renderPage()
 
     expect(await screen.findByText(/no one is on this project yet/i)).toBeInTheDocument()
   })
 
   it('adding a person is disabled until one is selected, then calls the endpoint', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -109,7 +89,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('removing a member calls the endpoint', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -123,7 +103,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('managing POCs shows the current list, missing roles, and adds a new one', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -145,7 +125,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('editing a POC prefills the form and saves via PUT', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -167,7 +147,7 @@ describe('ProjectDetailPage', () => {
   // into the POC name/email fields must never trigger a lookup against any
   // other project's POC data (no autocomplete/suggestion fetch).
   it('typing in the POC form triggers no additional network calls', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -184,7 +164,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('removing a POC calls the endpoint', async () => {
-    stubFetch()
+    stubProjectFetch()
     const user = userEvent.setup()
     renderPage()
 

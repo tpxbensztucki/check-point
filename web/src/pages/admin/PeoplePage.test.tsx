@@ -1,8 +1,7 @@
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setCurrentPerson } from '../../auth/currentPerson'
+import { afterEach, describe, expect, it } from 'vitest'
+import { renderAsUser, resetFetchStub, stubFetch } from '../../testUtils'
 import type { DepartmentWithPractices, PersonListEntry } from '../../adminApi'
 import PeoplePage from './PeoplePage'
 
@@ -25,45 +24,31 @@ const PEOPLE: PersonListEntry[] = [
   },
 ]
 
-function stubFetch({ postOk = true }: { postOk?: boolean } = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.url
-      if (init?.method === 'POST') {
-        return new Response(null, { status: postOk ? 201 : 400 })
-      }
-      if (url.includes('/departments')) {
-        return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
-      }
-      return new Response(JSON.stringify(PEOPLE), { status: 200 })
-    }) as unknown as typeof fetch,
-  )
+function stubPeopleFetch({ postOk = true }: { postOk?: boolean } = {}) {
+  stubFetch(async (input, init) => {
+    const url = typeof input === 'string' ? input : input.url
+    if (init?.method === 'POST') {
+      return new Response(null, { status: postOk ? 201 : 400 })
+    }
+    if (url.includes('/departments')) {
+      return new Response(JSON.stringify(DEPARTMENTS), { status: 200 })
+    }
+    return new Response(JSON.stringify(PEOPLE), { status: 200 })
+  })
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={['/dashboard/admin/people']}>
-      <Routes>
-        <Route path="/dashboard/admin/people" element={<PeoplePage />} />
-        <Route path="/dashboard/admin/people/:personId" element={<p>Person detail page</p>} />
-      </Routes>
-    </MemoryRouter>,
-  )
+  return renderAsUser(<PeoplePage />, {
+    path: '/dashboard/admin/people',
+    routes: [{ path: '/dashboard/admin/people/:personId', element: <p>Person detail page</p> }],
+  })
 }
 
 describe('PeoplePage', () => {
-  beforeEach(() => {
-    setCurrentPerson({ id: 'admin', fullName: 'Ada Admin', roles: ['Admin'] })
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    window.localStorage.clear()
-  })
+  afterEach(resetFetchStub)
 
   it('renders the people list', async () => {
-    stubFetch()
+    stubPeopleFetch()
     renderPage()
 
     expect(await screen.findByText('Riley Report')).toBeInTheDocument()
@@ -72,7 +57,7 @@ describe('PeoplePage', () => {
   })
 
   it('links a person to their detail page', async () => {
-    stubFetch()
+    stubPeopleFetch()
     renderPage()
 
     const link = await screen.findByText('Riley Report')
@@ -80,7 +65,7 @@ describe('PeoplePage', () => {
   })
 
   it('requires a name and practice before submitting', async () => {
-    stubFetch()
+    stubPeopleFetch()
     const user = userEvent.setup()
     renderPage()
 
@@ -91,7 +76,7 @@ describe('PeoplePage', () => {
   })
 
   it('creating a person with valid fields calls the endpoint', async () => {
-    stubFetch()
+    stubPeopleFetch()
     const user = userEvent.setup()
     renderPage()
 

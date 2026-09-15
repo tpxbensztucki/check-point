@@ -1,43 +1,24 @@
 using System.Net;
 using System.Net.Http.Json;
-using CheckPoint.Api.Auth;
 using CheckPoint.Api.Domain;
 using CheckPoint.Api.Contracts;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Testcontainers.PostgreSql;
 
 namespace CheckPoint.Api.IntegrationTests;
 
-public class PersonEndpointsTests : IAsyncLifetime
+public class PersonEndpointsTests : IntegrationTestBase
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine").Build();
-    private WebApplicationFactory<Program> _factory = null!;
     private Guid _adminPersonId;
     private Guid _nonAdminPersonId;
     private Guid _practiceId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
-
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment("Testing");
-            builder.ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Default"] = _postgres.GetConnectionString(),
-                });
-            });
-        });
+        await base.InitializeAsync();
 
         // Force the host (and its startup migration) to build before seeding.
-        using var scope = _factory.Services.CreateScope();
+        using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
 
         var adminRole = await db.Roles.SingleAsync(r => r.Name == RoleNames.Admin);
@@ -59,23 +40,6 @@ public class PersonEndpointsTests : IAsyncLifetime
         _nonAdminPersonId = nonAdmin.Id;
     }
 
-    public async Task DisposeAsync()
-    {
-        await _factory.DisposeAsync();
-        await _postgres.DisposeAsync();
-    }
-
-    private HttpClient CreateClient(Guid? actingAsPersonId = null)
-    {
-        var client = _factory.CreateClient();
-        if (actingAsPersonId is { } personId)
-        {
-            client.DefaultRequestHeaders.Add(DevPersonAuthenticationHandler.PersonIdHeader, personId.ToString());
-        }
-
-        return client;
-    }
-
     [Fact]
     public async Task Admin_CanCreatePerson_DefaultsToEmployedWithNoRolesAndNoLineManager()
     {
@@ -85,14 +49,14 @@ public class PersonEndpointsTests : IAsyncLifetime
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await response.Content.ReadJsonAsync<PersonResponse>();
         Assert.Equal("Jamie Newhire", person!.FullName);
         Assert.Equal(PersonStatus.Employed, person.Status);
         Assert.Equal(_practiceId, person.PracticeId);
         Assert.Null(person.LineManagerId);
         Assert.Null(person.HeadOfPracticeId);
 
-        using var scope = _factory.Services.CreateScope();
+        using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<CheckPointDbContext>();
         var saved = await db.People.Include(p => p.Roles).SingleAsync(p => p.Id == person.Id);
         Assert.Empty(saved.Roles);
@@ -108,7 +72,7 @@ public class PersonEndpointsTests : IAsyncLifetime
             new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, _adminPersonId));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var person = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await response.Content.ReadJsonAsync<PersonResponse>();
         Assert.Equal(_adminPersonId, person!.LineManagerId);
         Assert.Equal(_adminPersonId, person.HeadOfPracticeId);
     }
@@ -141,12 +105,12 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var createResponse = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, _adminPersonId, null));
-        var created = await createResponse.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var created = await createResponse.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.GetAsync("/people");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var people = await response.Content.ReadFromJsonAsync<List<PersonListEntry>>(JsonTestOptions.Value);
+        var people = await response.Content.ReadJsonAsync<List<PersonListEntry>>();
         var admin = people!.Single(p => p.Id == _adminPersonId);
         Assert.Contains(RoleNames.Admin, admin.Roles);
         Assert.Equal("Software Engineering", admin.PracticeName);
@@ -195,14 +159,14 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
             new UpdatePersonRequest("Jamie Renamed", _practiceId, _adminPersonId, _adminPersonId));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var updated = await response.Content.ReadJsonAsync<PersonResponse>();
         Assert.Equal("Jamie Renamed", updated!.FullName);
         Assert.Equal(_adminPersonId, updated.LineManagerId);
         Assert.Equal(_adminPersonId, updated.HeadOfPracticeId);
@@ -214,14 +178,14 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
         Assert.Null(person!.Email);
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person.Id}",
             new UpdatePersonRequest("Jamie Newhire", _practiceId, null, null, "jamie@example.com"));
 
-        var updated = await response.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var updated = await response.Content.ReadJsonAsync<PersonResponse>();
         Assert.Equal("jamie@example.com", updated!.Email);
     }
 
@@ -231,7 +195,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
@@ -258,7 +222,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var client = CreateClient(_adminPersonId);
         var created = await client.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         var response = await client.PutAsJsonAsync(
             $"/people/{person!.Id}",
@@ -273,7 +237,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         using var client = CreateClient(_nonAdminPersonId);
         var response = await client.PutAsJsonAsync(
@@ -289,7 +253,7 @@ public class PersonEndpointsTests : IAsyncLifetime
         using var adminClient = CreateClient(_adminPersonId);
         var created = await adminClient.PostAsJsonAsync(
             "/people", new CreatePersonRequest("Jamie Newhire", _practiceId, null, null));
-        var person = await created.Content.ReadFromJsonAsync<PersonResponse>(JsonTestOptions.Value);
+        var person = await created.Content.ReadJsonAsync<PersonResponse>();
 
         using var client = CreateClient();
         var response = await client.PutAsJsonAsync(

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { fetchCatchUpHistory, recordCatchUpOutcome, type CatchUpOutcomeType, type PersonCatchUpHistory } from '../api'
-
-type LoadState = { kind: 'loading' } | { kind: 'loaded'; history: PersonCatchUpHistory | null }
+import { fetchCatchUpHistory, recordCatchUpOutcome, type CatchUpOutcomeType } from '../api'
+import { useAsyncData } from '../hooks/useAsyncData'
 
 const OUTCOME_LABELS: Record<CatchUpOutcomeType, string> = {
   SixWeekCheckInAdded: 'Six-week check-in added',
@@ -16,30 +15,17 @@ const OUTCOME_LABELS: Record<CatchUpOutcomeType, string> = {
 // shipped in Milestone 8 with no frontend of its own; this is that frontend.
 function CatchUpOutcomePage() {
   const { personId } = useParams<{ personId: string }>()
-  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const { state, reload: load } = useAsyncData(
+    () => (personId ? fetchCatchUpHistory(personId) : Promise.resolve(null)),
+    [personId],
+  )
   const [outcomeType, setOutcomeType] = useState<CatchUpOutcomeType>('NoActionClosed')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const load = () => {
-    if (!personId) {
-      return
-    }
-
-    setState({ kind: 'loading' })
-    fetchCatchUpHistory(personId).then((history) => {
-      setState({ kind: 'loaded', history })
-    })
-  }
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personId])
-
-  const pending = state.kind === 'loaded' ? state.history?.entries.find((e) => e.status === 'Pending') : undefined
-  const resolved = state.kind === 'loaded' ? state.history?.entries.filter((e) => e.status !== 'Pending') ?? [] : []
+  const pending = state.kind === 'loaded' ? state.data.entries.find((e) => e.status === 'Pending') : undefined
+  const resolved = state.kind === 'loaded' ? state.data.entries.filter((e) => e.status !== 'Pending') : []
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -72,11 +58,11 @@ function CatchUpOutcomePage() {
 
       {state.kind === 'loading' && <p className="mt-4 text-sm text-gray-500">Loading…</p>}
 
-      {state.kind === 'loaded' && !state.history && (
+      {state.kind === 'error' && (
         <p className="mt-4 text-sm text-gray-500">Could not load this Person's catch-up history.</p>
       )}
 
-      {state.kind === 'loaded' && state.history && (
+      {state.kind === 'loaded' && (
         <>
           {pending ? (
             <form onSubmit={handleSubmit} className="mt-4 max-w-md rounded-md border border-gray-200 bg-white p-4">
