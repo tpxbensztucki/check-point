@@ -327,6 +327,83 @@ public class RequestDispatchServiceTests : IntegrationTestBase
     private static string ExtractToken(SentEmail email) =>
         email.Body.Split("/feedback/")[1].Split('\n')[0].Trim();
 
+    // CBLT-316 regression fakes: unlike RecordingEmailSender, these actually
+    // throw, so tests can assert that a send failure never leaves link/status
+    // state half-applied — the whole point of the fix.
+    private class AlwaysThrowingEmailSender : IEmailSender
+    {
+        public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Simulated send failure");
+    }
+
+    private class ThrowsForOneAddressEmailSender(string throwingAddress) : IEmailSender
+    {
+        public List<SentEmail> Sent { get; } = [];
+
+        public Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+        {
+            if (to == throwingAddress)
+            {
+                throw new InvalidOperationException("Simulated send failure");
+            }
+
+            Sent.Add(new SentEmail(to, subject, body));
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task WhenTheReminderEmailFailsToSend_ThePriorLinkIsStillInvalidatedAndTheNewLinkStillExists()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocId = await AddPocAsync(personId, "Jamie Internal", "jamie@example.com", PocRelationship.Internal);
+
+        var emailSender = new RecordingEmailSender();
+        await using var context = CreateContext();
+        var service = CreateService(context, emailSender);
+        await service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false);
+        var originalToken = ExtractToken(emailSender.Sent.Single());
+
+        var throwingService = CreateDispatchService(context, new AlwaysThrowingEmailSender());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => throwingService.SendReminderAsync(
+            requestId, pocId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false));
+
+        var magicLinkService = new MagicLinkService(context, Time);
+        var originalResult = await magicLinkService.ValidateAsync(originalToken);
+        Assert.Equal(MagicLinkValidationStatus.Superseded, originalResult.Status);
+
+        var stillValidLinks = await context.MagicLinks
+            .Where(l => l.FeedbackRequestId == requestId && l.PocId == pocId && l.InvalidatedAt == null)
+            .ToListAsync();
+        var newLink = Assert.Single(stillValidLinks);
+        var newResult = await magicLinkService.ValidateAsync(newLink.Token);
+        Assert.Equal(MagicLinkValidationStatus.Valid, newResult.Status);
+    }
+
+    [Fact]
+    public async Task WhenOnePocsSendFailsDuringDispatch_EveryPocsLinkAndTheRequestsSentStatusAreStillPersisted()
+    {
+        var (personId, requestId) = await ScheduleRequestAsync();
+        var pocAId = await AddPocAsync(personId, "Ali PocA", "ali@example.com", PocRelationship.Internal);
+        var pocBId = await AddPocAsync(personId, "Blair PocB", "blair@example.com", PocRelationship.Internal);
+
+        await using var context = CreateContext();
+        var emailSender = new ThrowsForOneAddressEmailSender("blair@example.com");
+        var service = CreateDispatchService(context, emailSender);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DispatchManuallyAsync(
+            requestId, Guid.NewGuid(), callerIsAdmin: true, callerIsPracticeLead: false, callerIsLineManager: false));
+
+        var request = await context.FeedbackRequests.SingleAsync(r => r.Id == requestId);
+        Assert.Equal(FeedbackRequestStatus.Sent, request.Status);
+
+        var links = await context.MagicLinks.Where(l => l.FeedbackRequestId == requestId).ToListAsync();
+        Assert.Equal(2, links.Count);
+        Assert.Contains(links, l => l.PocId == pocAId);
+        Assert.Contains(links, l => l.PocId == pocBId);
+    }
+
     [Fact]
     public async Task AReminder_IssuesAFreshLinkAndInvalidatesThePriorOne()
     {

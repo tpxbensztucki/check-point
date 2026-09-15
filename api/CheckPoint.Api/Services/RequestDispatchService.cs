@@ -164,8 +164,19 @@ public class RequestDispatchService(
             link.InvalidatedAt = now;
         }
 
-        await SendRequestEmailAsync(request, request.ProjectMembership, poc, cancellationToken);
+        // The old link's invalidation and the new link's creation are
+        // persisted together, in one commit, before the email send is even
+        // attempted (CBLT-316) — so a failed send can never leave the old
+        // link un-invalidated while a new one already exists. Previously the
+        // new link was saved (via MagicLinkService.IssueAsync's own internal
+        // SaveChangesAsync) as a side effect of building the email body,
+        // ahead of this method's own save of the invalidation, with the send
+        // attempted in between; a thrown SmtpException left the invalidation
+        // unsaved while the new link was already durable.
+        var prepared = PrepareRequestEmail(request, request.ProjectMembership, poc);
         await db.SaveChangesAsync(cancellationToken);
+
+        await SendPreparedEmailAsync(poc, request.ProjectMembership, prepared.Body, cancellationToken);
 
         return ReminderResult.Sent;
     }
@@ -252,30 +263,48 @@ public class RequestDispatchService(
         return now > link.ExpiresAt ? PocResponseStatus.NoResponse : PocResponseStatus.Sent;
     }
 
+    // All of a request's per-POC magic links (and its own Sent status) are
+    // created and persisted in one commit before any email send is attempted
+    // (CBLT-316) — so a send failure partway through a multi-POC request can
+    // never leave some POCs with a durable link while the request itself is
+    // still Scheduled and others' links were never created at all. Previously
+    // each POC's link was saved individually (inside SendRequestEmailAsync,
+    // interleaved with that POC's own send) ahead of the request's own status
+    // save at the end of the loop.
     private async Task DispatchToAllPocsAsync(FeedbackRequest request, CancellationToken cancellationToken)
     {
         var membership = request.ProjectMembership;
-        foreach (var poc in membership.Pocs)
-        {
-            await SendRequestEmailAsync(request, membership, poc, cancellationToken);
-        }
+        var prepared = membership.Pocs
+            .Select(poc => PrepareRequestEmail(request, membership, poc))
+            .ToList();
 
         request.Status = FeedbackRequestStatus.Sent;
         await db.SaveChangesAsync(cancellationToken);
+
+        foreach (var item in prepared)
+        {
+            await SendPreparedEmailAsync(item.Poc, membership, item.Body, cancellationToken);
+        }
     }
 
-    private async Task SendRequestEmailAsync(
-        FeedbackRequest request, ProjectMembership membership, Poc poc, CancellationToken cancellationToken)
+    private readonly record struct PreparedEmail(Poc Poc, string Body);
+
+    // Builds the email body and creates (but does not save) the magic link it
+    // references — callers must persist the link themselves, alongside
+    // whatever other state (an invalidated prior link, the request's Sent
+    // status) needs to land in the same commit, before attempting to send.
+    private PreparedEmail PrepareRequestEmail(FeedbackRequest request, ProjectMembership membership, Poc poc)
     {
         var baseUrl = frontendOptions.Value.BaseUrl.TrimEnd('/');
-        var link = await magicLinkService.IssueAsync(request.Id, poc.Id, cancellationToken);
+        var link = magicLinkService.CreateUnsaved(request.Id, poc.Id);
         var feedbackUrl = $"{baseUrl}/feedback/{link.Token}";
         var body = $"Hi {poc.Name},\n\n"
             + $"Please share your feedback on {membership.Person.FullName}'s work: {feedbackUrl}\n\n"
             + "This link is valid for 7 days and can only be used once.";
 
-        await emailSender.SendAsync(
-            poc.Email, $"Feedback request: {membership.Person.FullName}", body, cancellationToken);
+        return new PreparedEmail(poc, body);
     }
 
+    private Task SendPreparedEmailAsync(Poc poc, ProjectMembership membership, string body, CancellationToken cancellationToken) =>
+        emailSender.SendAsync(poc.Email, $"Feedback request: {membership.Person.FullName}", body, cancellationToken);
 }
